@@ -83,7 +83,17 @@ class ScanGEO_Updater {
 		if ( empty( $hook_extra['action'] ) || 'update' !== $hook_extra['action'] || empty( $hook_extra['type'] ) || 'plugin' !== $hook_extra['type'] ) {
 			return;
 		}
-		$plugins = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array();
+		// Actualización en bloque (checkboxes): $hook_extra['plugins'] es un array.
+		// Actualización individual (el enlace "Actualízalo ahora" de un solo
+		// plugin, que es el que se usa desde el aviso amarillo): WordPress
+		// manda 'plugin' (singular) con un solo nombre, no 'plugins'. Había
+		// que comprobar los dos casos; por eso nunca se limpiaba la caché.
+		$plugins = array();
+		if ( ! empty( $hook_extra['plugins'] ) ) {
+			$plugins = (array) $hook_extra['plugins'];
+		} elseif ( ! empty( $hook_extra['plugin'] ) ) {
+			$plugins = array( $hook_extra['plugin'] );
+		}
 		if ( ! in_array( self::PLUGIN_FILE, $plugins, true ) ) {
 			return;
 		}
