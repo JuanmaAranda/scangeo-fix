@@ -11,9 +11,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class ScanGEO_AI {
 
+	/** Endpoint propio (scangeo.app) para la IA incluida por defecto en el plugin. */
+	const INCLUDED_ENDPOINT = 'https://scangeo.app/api/public/wp-plugin/ai';
+
 	public static function is_configured() {
-		$opts = get_option( 'scangeo_settings', array() );
-		return ! empty( $opts['api_key'] ) && ! empty( $opts['provider'] );
+		$opts     = get_option( 'scangeo_settings', array() );
+		$provider = ! empty( $opts['provider'] ) ? $opts['provider'] : 'included';
+		if ( 'included' === $provider ) {
+			return true; // Siempre "disponible": si se agota la cuota, generate() devuelve el aviso correspondiente.
+		}
+		return ! empty( $opts['api_key'] );
 	}
 
 	/**
@@ -94,16 +101,97 @@ class ScanGEO_AI {
 	 * @param int    $max_tokens Límite de tokens de salida.
 	 */
 	public static function generate( $prompt, $max_tokens = 300 ) {
-		$opts = get_option( 'scangeo_settings', array() );
+		$opts     = get_option( 'scangeo_settings', array() );
+		$provider = ! empty( $opts['provider'] ) ? $opts['provider'] : 'included';
+
+		if ( 'included' === $provider ) {
+			return self::call_included( $prompt, $max_tokens );
+		}
 		if ( empty( $opts['api_key'] ) ) {
 			return new WP_Error( 'scangeo_no_key', 'Sin clave API configurada.' );
 		}
-		$provider = isset( $opts['provider'] ) ? $opts['provider'] : 'anthropic';
-
 		if ( 'openai' === $provider ) {
 			return self::call_openai( $opts, $prompt, $max_tokens );
 		}
 		return self::call_anthropic( $opts, $prompt, $max_tokens );
+	}
+
+	/** Dominio del sitio, usado como identificador de cuota en el endpoint incluido. */
+	private static function included_domain() {
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		return $host ? strtolower( $host ) : '';
+	}
+
+	private static function call_included( $prompt, $max_tokens ) {
+		$domain = self::included_domain();
+		if ( ! $domain ) {
+			return new WP_Error( 'scangeo_no_domain', 'No se pudo determinar el dominio de este sitio.' );
+		}
+		$response = wp_remote_post(
+			self::INCLUDED_ENDPOINT,
+			array(
+				'timeout' => 30,
+				'headers' => array( 'Content-Type' => 'application/json' ),
+				'body'    => wp_json_encode( array(
+					'domain'     => $domain,
+					'prompt'     => $prompt,
+					'max_tokens' => $max_tokens,
+				) ),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 429 === $code ) {
+			delete_transient( 'scangeo_included_quota' ); // El indicador de Ajustes se refresca en la próxima visita.
+			$limit = isset( $body['limit'] ) ? $body['limit'] : '';
+			return new WP_Error(
+				'scangeo_quota_exceeded',
+				'Se ha agotado la cuota gratuita de IA incluida de este mes' . ( $limit ? ' (' . $limit . ' consultas)' : '' ) . '. Añade tu propia clave de Anthropic u OpenAI en Ajustes → Generación de textos con IA para seguir generando propuestas sin límite.'
+			);
+		}
+		if ( 200 !== $code || empty( $body['text'] ) ) {
+			$msg = isset( $body['error'] ) ? $body['error'] : 'HTTP ' . $code;
+			return new WP_Error( 'scangeo_ai_error', 'IA incluida: ' . $msg );
+		}
+		if ( isset( $body['remaining'], $body['limit'] ) ) {
+			set_transient( 'scangeo_included_quota', array( 'limit' => (int) $body['limit'], 'remaining' => (int) $body['remaining'] ), 5 * MINUTE_IN_SECONDS );
+		}
+		return trim( $body['text'] );
+	}
+
+	/**
+	 * Cuánta cuota gratuita queda este mes, para enseñarlo en Ajustes.
+	 * Caché de 5 minutos para no llamar al endpoint en cada carga del panel.
+	 *
+	 * @return array{limit:int,remaining:int}|false
+	 */
+	public static function get_included_quota() {
+		$cached = get_transient( 'scangeo_included_quota' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+		$domain = self::included_domain();
+		if ( ! $domain ) {
+			return false;
+		}
+		$response = wp_remote_get(
+			self::INCLUDED_ENDPOINT . '?domain=' . rawurlencode( $domain ),
+			array( 'timeout' => 15 )
+		);
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			return false;
+		}
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! isset( $body['limit'], $body['remaining'] ) ) {
+			return false;
+		}
+		$result = array( 'limit' => (int) $body['limit'], 'remaining' => (int) $body['remaining'] );
+		set_transient( 'scangeo_included_quota', $result, 5 * MINUTE_IN_SECONDS );
+		return $result;
 	}
 
 	private static function call_anthropic( $opts, $prompt, $max_tokens ) {

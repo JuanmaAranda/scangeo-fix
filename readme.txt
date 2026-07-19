@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.9.10
+Stable tag: 2.0.0
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,11 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.0.0 =
+* Nuevo: IA incluida en el plugin por defecto (GPT-4o mini), sin necesidad de configurar ninguna clave. Con un límite de consultas gratis al mes por sitio; al agotarse, se avisa y se puede añadir una clave propia de Anthropic u OpenAI en Ajustes para seguir sin límite.
+* Nuevo: indicador de cuota restante en Ajustes ("X de Y consultas gratis este mes").
+* Nuevo: aviso explicativo en el informe si se agota la cuota, con enlace directo a Ajustes.
 
 = 1.9.10 =
 * Cambio de fondo: la comparación de versiones ya no usa la constante SCANGEO_FIXER_VERSION (definida al ejecutar el PHP, y potencialmente desincronizada de OPcache en algunos hostings justo después de actualizar), sino que lee la versión directamente de la cabecera del archivo en disco, igual que hace WordPress. Si el aviso fantasma seguía apareciendo tras cada actualización, esta era la explicación más probable.

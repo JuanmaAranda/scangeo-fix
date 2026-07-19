@@ -51,6 +51,15 @@
 .scangeo-update-pill:hover { background: #d98c05; color: #fff; }
 .scangeo-check-update-link { font-size: 12px; color: var(--scangeo-ink-soft); text-decoration: underline; }
 .scangeo-check-update-link:hover { color: var(--scangeo-blue); }
+
+#scangeo-included-quota {
+	display: inline-block;
+	background: var(--scangeo-blue-soft);
+	border-radius: 8px;
+	padding: 10px 14px;
+	font-size: 13.5px;
+}
+#scangeo-included-quota strong { color: var(--scangeo-blue-dark); }
 @keyframes scangeo-pulse {
 	0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .35); }
 	50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }

@@ -24,6 +24,7 @@ class ScanGEO_Admin {
 		add_action( 'wp_ajax_scangeo_undo_fix', array( __CLASS__, 'ajax_undo_fix' ) );
 		add_action( 'wp_ajax_scangeo_verify_key', array( __CLASS__, 'ajax_verify_key' ) );
 		add_action( 'wp_ajax_scangeo_save_model', array( __CLASS__, 'ajax_save_model' ) );
+		add_action( 'wp_ajax_scangeo_use_included', array( __CLASS__, 'ajax_use_included' ) );
 	}
 
 	/**
@@ -110,12 +111,12 @@ class ScanGEO_Admin {
 		// (la clave se guarda por AJAX al verificarla, no por este formulario).
 		$existing = get_option( 'scangeo_settings', array() );
 		$out      = wp_parse_args( is_array( $existing ) ? $existing : array(), array(
-			'provider'        => 'anthropic',
+			'provider'        => 'included',
 			'api_key'         => '',
 			'model'           => '',
 			'social_profiles' => '',
 		) );
-		if ( isset( $input['provider'] ) && in_array( $input['provider'], array( 'anthropic', 'openai' ), true ) ) {
+		if ( isset( $input['provider'] ) && in_array( $input['provider'], array( 'included', 'anthropic', 'openai' ), true ) ) {
 			$out['provider'] = $input['provider'];
 		}
 		if ( ! empty( $input['api_key'] ) ) {
@@ -588,6 +589,27 @@ class ScanGEO_Admin {
 	}
 
 	/** Guarda el modelo elegido en el desplegable. */
+	/** Cambia el proveedor a "IA incluida" (gratis, con límite mensual) sin necesitar clave propia. */
+	public static function ajax_use_included() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Permisos insuficientes.' ), 403 );
+		}
+		check_ajax_referer( 'scangeo_fix', 'nonce' );
+
+		$opts             = get_option( 'scangeo_settings', array() );
+		$opts             = is_array( $opts ) ? $opts : array();
+		$opts['provider'] = 'included';
+		update_option( 'scangeo_settings', $opts, false );
+
+		delete_transient( 'scangeo_included_quota' ); // Forzar lectura fresca de cuota.
+		$quota = ScanGEO_AI::get_included_quota();
+
+		wp_send_json_success( array(
+			'limit'     => $quota ? $quota['limit'] : null,
+			'remaining' => $quota ? $quota['remaining'] : null,
+		) );
+	}
+
 	public static function ajax_save_model() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => 'Permisos insuficientes.' ), 403 );
@@ -769,23 +791,44 @@ class ScanGEO_Admin {
 
 	private static function render_settings() {
 		$opts = wp_parse_args( get_option( 'scangeo_settings', array() ), array(
-			'provider' => 'anthropic', 'api_key' => '', 'model' => '', 'social_profiles' => '',
+			'provider' => 'included', 'api_key' => '', 'model' => '', 'social_profiles' => '',
 		) );
-		$has_key = ! empty( $opts['api_key'] );
+		$has_key     = ! empty( $opts['api_key'] );
+		$is_included = 'included' === $opts['provider'];
+		$quota       = $is_included ? ScanGEO_AI::get_included_quota() : false;
 		?>
 		<div class="scangeo-settings">
-			<h2>Generación de textos con IA (opcional)</h2>
-			<p>Si configuras una clave API, las meta descriptions, títulos y alt de imágenes se generarán con IA. Sin clave, se usan heurísticas básicas (extracto del contenido, nombre de archivo).</p>
+			<h2>Generación de textos con IA</h2>
+			<p>Las meta descriptions, títulos, alt de imágenes y propuestas de contenido (FAQ, respuesta directa, enlaces, ampliar contenido) se generan con IA. Por defecto se usa una IA incluida en el plugin con un límite de consultas gratis al mes; si lo prefieres, puedes usar tu propia clave de Anthropic u OpenAI sin límite.</p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="scangeo-provider">Proveedor</label></th>
 					<td>
 						<select id="scangeo-provider">
-							<option value="anthropic" <?php selected( $opts['provider'], 'anthropic' ); ?>>Anthropic (Claude)</option>
-							<option value="openai" <?php selected( $opts['provider'], 'openai' ); ?>>OpenAI</option>
+							<option value="included" <?php selected( $opts['provider'], 'included' ); ?>>IA incluida en el plugin (gratis, con límite mensual)</option>
+							<option value="anthropic" <?php selected( $opts['provider'], 'anthropic' ); ?>>Mi propia clave — Anthropic (Claude)</option>
+							<option value="openai" <?php selected( $opts['provider'], 'openai' ); ?>>Mi propia clave — OpenAI</option>
 						</select>
 					</td>
 				</tr>
+				<tr id="scangeo-included-row" <?php echo $is_included ? '' : 'style="display:none"'; ?>>
+					<th scope="row">Cuota gratuita este mes</th>
+					<td>
+						<div id="scangeo-included-quota">
+						<?php if ( $quota ) : ?>
+							<strong><?php echo (int) $quota['remaining']; ?> de <?php echo (int) $quota['limit']; ?></strong> consultas gratis restantes este mes.
+							<?php if ( 0 === (int) $quota['remaining'] ) : ?>
+								<p class="description">Se ha agotado la cuota de este mes. Cambia a tu propia clave arriba para seguir sin límite, o espera a que se renueve el mes que viene.</p>
+							<?php endif; ?>
+						<?php else : ?>
+							<span class="description">No se ha podido comprobar la cuota ahora mismo (puede ser un corte de red puntual). Se reintentará automáticamente.</span>
+						<?php endif; ?>
+						</div>
+					</td>
+				</tr>
+			</table>
+			<div id="scangeo-own-key-fields" <?php echo $is_included ? 'style="display:none"' : ''; ?>>
+			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="scangeo-api-key">Clave API</label></th>
 					<td>
@@ -813,6 +856,7 @@ class ScanGEO_Admin {
 					</td>
 				</tr>
 			</table>
+			</div>
 
 			<form method="post" action="options.php">
 				<?php settings_fields( 'scangeo_settings_group' ); ?>
@@ -861,6 +905,19 @@ class ScanGEO_Admin {
 			echo 'Sin ella no se puede generar este resumen en palabras sencillas, ni las propuestas de contenido (meta descriptions, FAQ, enlaces, ampliar contenido…). ';
 			echo '<a href="' . esc_url( $settings_url ) . '">Ir a Ajustes →</a>';
 			echo '</div>';
+			return;
+		}
+		$opts = wp_parse_args( get_option( 'scangeo_settings', array() ), array( 'provider' => 'included' ) );
+		if ( 'included' === $opts['provider'] ) {
+			$quota = ScanGEO_AI::get_included_quota();
+			if ( $quota && 0 === (int) $quota['remaining'] ) {
+				$settings_url = admin_url( 'admin.php?page=scangeo-fixer&tab=settings' );
+				echo '<div class="scangeo-warning-box">';
+				echo '<strong>Cuota gratuita de IA agotada este mes.</strong> Por eso no se ha podido generar el resumen ni las propuestas de contenido. ';
+				echo 'Añade tu propia clave de Anthropic u OpenAI en Ajustes para seguir sin límite, o espera a que se renueve el mes que viene. ';
+				echo '<a href="' . esc_url( $settings_url ) . '">Ir a Ajustes →</a>';
+				echo '</div>';
+			}
 		}
 	}
 

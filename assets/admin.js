@@ -312,10 +312,47 @@
 		verifyKey( key );
 	} );
 
+	function renderIncludedQuota( limit, remaining ) {
+		var $box = $( '#scangeo-included-quota' ).empty();
+		if ( null === limit || undefined === limit ) {
+			$( '<span class="description"></span>' ).text( 'No se ha podido comprobar la cuota ahora mismo. Se reintentará automáticamente.' ).appendTo( $box );
+			return;
+		}
+		$( '<strong></strong>' ).text( remaining + ' de ' + limit ).appendTo( $box );
+		$box.append( ' consultas gratis restantes este mes.' );
+		if ( 0 === remaining ) {
+			$( '<p class="description"></p>' ).text( 'Se ha agotado la cuota de este mes. Cambia a tu propia clave arriba para seguir sin límite, o espera a que se renueve el mes que viene.' ).appendTo( $box );
+		}
+	}
+
 	$( document ).on( 'change', '#scangeo-provider', function () {
-		setKeyStatus( '', '' );
-		$( '#scangeo-model-row' ).hide();
-		$( '#scangeo-api-key' ).attr( 'placeholder', 'sk-…' );
+		var provider = $( this ).val();
+		if ( 'included' === provider ) {
+			$( '#scangeo-included-row' ).show();
+			$( '#scangeo-own-key-fields' ).hide();
+			$( '#scangeo-included-quota' ).text( 'Comprobando cuota…' );
+			$.post( scangeoFixer.ajaxUrl, {
+				action: 'scangeo_use_included',
+				nonce: scangeoFixer.nonce
+			} ).then(
+				function ( res ) {
+					if ( res && res.success && res.data ) {
+						renderIncludedQuota( res.data.limit, res.data.remaining );
+					} else {
+						renderIncludedQuota( null, null );
+					}
+				},
+				function () {
+					renderIncludedQuota( null, null );
+				}
+			);
+		} else {
+			$( '#scangeo-included-row' ).hide();
+			$( '#scangeo-own-key-fields' ).show();
+			setKeyStatus( '', '' );
+			$( '#scangeo-model-row' ).hide();
+			$( '#scangeo-api-key' ).attr( 'placeholder', 'sk-…' );
+		}
 	} );
 
 	$( document ).on( 'change', '#scangeo-model-select', function () {
