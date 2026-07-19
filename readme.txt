@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.9.6
+Stable tag: 1.9.7
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,11 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 1.9.7 =
+* Corrección: aviso fantasma de "hay una nueva versión" que se quedaba mostrando la misma versión ya instalada. Ahora se limpia explícitamente la caché justo después de cada actualización, y se marca de forma explícita "no_update" cuando no la hay (WordPress dejaba de refrescarlo solo).
+* Corrección: "Ver detalles" podía aparecer duplicado en la fila del plugin; se ha añadido protección para que nunca se registre/añada dos veces.
+* Mejora: el modal de "Ver detalles" ahora tiene banner de cabecera con el logo, una descripción completa de lo que hace el plugin, instrucciones de instalación, y el registro de cambios de varias versiones (no solo la última) — igual que los plugins de wordpress.org, sin necesitar estar en su repositorio.
 
 = 1.9.6 =
 * Nuevo: en el listado de Plugins, la fila de scanGEO Fixer ahora tiene "Visitar la web del plugin" y el autor enlazan a scangeo.app, y aparece "Ver detalles" con el mismo modal que usan los plugins de wordpress.org (no hace falta estar en el repositorio oficial para tenerlo).
