@@ -15,6 +15,8 @@ class ScanGEO_Admin {
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'admin_init', array( __CLASS__, 'maybe_seed_history' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_upload' ) );
+		add_action( 'admin_init', array( __CLASS__, 'maybe_force_update_check' ) );
+		add_action( 'admin_init', array( __CLASS__, 'maybe_auto_check_update' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'wp_ajax_scangeo_fix_issue', array( __CLASS__, 'ajax_fix_issue' ) );
 		add_action( 'wp_ajax_scangeo_apply_suggestion', array( __CLASS__, 'ajax_apply_suggestion' ) );
@@ -22,6 +24,48 @@ class ScanGEO_Admin {
 		add_action( 'wp_ajax_scangeo_undo_fix', array( __CLASS__, 'ajax_undo_fix' ) );
 		add_action( 'wp_ajax_scangeo_verify_key', array( __CLASS__, 'ajax_verify_key' ) );
 		add_action( 'wp_ajax_scangeo_save_model', array( __CLASS__, 'ajax_save_model' ) );
+	}
+
+	/**
+	 * Atiende el clic en "Comprobar actualización del plugin". Tiene que
+	 * ejecutarse en admin_init (antes de que se envíe ninguna cabecera),
+	 * nunca dentro del render de la página, o el redirect llega demasiado
+	 * tarde y deja el panel en blanco.
+	 */
+	public static function maybe_force_update_check() {
+		if ( ! isset( $_GET['scangeo_check_update'] ) || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		check_admin_referer( 'scangeo_check_update' );
+
+		delete_transient( 'scangeo_fixer_latest_release' );
+		if ( ! function_exists( 'wp_update_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+		delete_site_transient( 'update_plugins' ); // Fuerza el recálculo completo, no solo un "top up".
+		wp_update_plugins();
+
+		wp_safe_redirect( remove_query_arg( array( 'scangeo_check_update', '_wpnonce' ) ) );
+		exit;
+	}
+
+	/**
+	 * Comprobación automática (silenciosa) al abrir el panel del plugin,
+	 * como máximo una vez cada 10 minutos, para no ralentizar cada visita
+	 * ni saturar la API de GitHub o de WordPress.org.
+	 */
+	public static function maybe_auto_check_update() {
+		if ( empty( $_GET['page'] ) || 'scangeo-fixer' !== $_GET['page'] ) { // phpcs:ignore
+			return;
+		}
+		if ( false !== get_transient( 'scangeo_auto_check_lock' ) ) {
+			return;
+		}
+		set_transient( 'scangeo_auto_check_lock', 1, 10 * MINUTE_IN_SECONDS );
+		if ( ! function_exists( 'wp_update_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+		wp_update_plugins();
 	}
 
 	public static function menu() {
@@ -608,30 +652,6 @@ class ScanGEO_Admin {
 			return;
 		}
 
-		// Botón "Comprobar ahora": borra la caché de GitHub y obliga a
-		// WordPress a recalcular su propio aviso de actualización (el de
-		// Plugins → "Hay una nueva versión disponible"), no solo el de aquí.
-		if ( isset( $_GET['scangeo_check_update'] ) && check_admin_referer( 'scangeo_check_update' ) ) {
-			delete_transient( 'scangeo_fixer_latest_release' );
-			if ( ! function_exists( 'wp_update_plugins' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/update.php';
-			}
-			wp_update_plugins();
-			wp_safe_redirect( remove_query_arg( array( 'scangeo_check_update', '_wpnonce' ) ) );
-			exit;
-		}
-
-		// Comprobación automática (silenciosa) al abrir el panel, pero como
-		// máximo una vez cada 10 minutos, para no ralentizar cada visita ni
-		// saturar la API de GitHub / WordPress.org.
-		if ( false === get_transient( 'scangeo_auto_check_lock' ) ) {
-			set_transient( 'scangeo_auto_check_lock', 1, 10 * MINUTE_IN_SECONDS );
-			if ( ! function_exists( 'wp_update_plugins' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/update.php';
-			}
-			wp_update_plugins();
-		}
-
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'report'; // phpcs:ignore
 		echo '<div class="wrap scangeo-wrap">';
 		echo '<div class="scangeo-header">';
@@ -640,7 +660,7 @@ class ScanGEO_Admin {
 		echo '<span class="scangeo-version-badge">v' . esc_html( SCANGEO_FIXER_VERSION ) . '</span>';
 		$latest = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::get_latest_version() : '';
 		if ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) {
-			echo '<a href="' . esc_url( admin_url( 'plugins.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
+			echo '<a href="' . esc_url( admin_url( 'update-core.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';

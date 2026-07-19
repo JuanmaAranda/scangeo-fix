@@ -95,12 +95,15 @@ class ScanGEO_Updater {
 			return $transient;
 		}
 		if ( version_compare( $release['version'], SCANGEO_FIXER_VERSION, '>' ) ) {
+			$icon_url = defined( 'SCANGEO_FIXER_URL' ) ? SCANGEO_FIXER_URL . 'assets/icon.png' : '';
 			$transient->response[ self::PLUGIN_FILE ] = (object) array(
 				'slug'        => self::SLUG,
 				'plugin'      => self::PLUGIN_FILE,
 				'new_version' => $release['version'],
 				'url'         => $release['notes_url'],
 				'package'     => $release['zip_url'],
+				'tested'      => get_bloginfo( 'version' ),
+				'icons'       => $icon_url ? array( '1x' => $icon_url, '2x' => $icon_url, 'default' => $icon_url ) : array(),
 			);
 		}
 		return $transient;
@@ -115,16 +118,21 @@ class ScanGEO_Updater {
 		if ( ! $release ) {
 			return $result;
 		}
+		$icon_url = defined( 'SCANGEO_FIXER_URL' ) ? SCANGEO_FIXER_URL . 'assets/icon.png' : '';
 		return (object) array(
 			'name'          => 'scanGEO Fixer',
 			'slug'          => self::SLUG,
 			'version'       => $release['version'],
 			'author'        => '<a href="https://scangeo.app">scanGEO.app</a>',
 			'homepage'      => $release['notes_url'],
+			'tested'        => get_bloginfo( 'version' ),
+			'requires'      => '5.8',
+			'requires_php'  => '7.4',
 			'sections'      => array(
 				'changelog' => $release['body'] ? wpautop( wp_kses_post( $release['body'] ) ) : 'Sin notas de la versión.',
 			),
 			'download_link' => $release['zip_url'],
+			'icons'         => $icon_url ? array( '1x' => $icon_url, '2x' => $icon_url, 'default' => $icon_url ) : array(),
 		);
 	}
 
