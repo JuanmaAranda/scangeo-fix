@@ -643,7 +643,7 @@ class ScanGEO_Admin {
 			echo '<a href="' . esc_url( admin_url( 'plugins.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
-		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar ahora</a>';
+		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';
 		echo '</div>';
 		echo '<a href="https://scangeo.app" target="_blank" rel="noopener" class="scangeo-header-link">scanGEO.app ↗</a>';
 		echo '<h1 class="screen-reader-text">scanGEO Fixer</h1>';
