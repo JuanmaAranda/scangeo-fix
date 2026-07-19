@@ -102,6 +102,29 @@ class ScanGEO_Updater {
 		delete_site_transient( 'update_plugins' );
 	}
 
+	/**
+	 * Versión realmente instalada, leída directamente de la cabecera del
+	 * archivo del plugin en disco (igual que hace el propio WordPress),
+	 * en vez de la constante SCANGEO_FIXER_VERSION. La constante se define
+	 * al ejecutar el PHP, y en hostings con OPcache configurado de forma
+	 * agresiva puede seguir sirviendo el valor de la versión anterior
+	 * durante un rato después de actualizar los archivos — leer el
+	 * archivo directamente evita ese problema.
+	 */
+	public static function installed_version() {
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$path = WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE;
+		if ( file_exists( $path ) ) {
+			$data = get_plugin_data( $path, false, false );
+			if ( ! empty( $data['Version'] ) ) {
+				return trim( (string) $data['Version'] );
+			}
+		}
+		return defined( 'SCANGEO_FIXER_VERSION' ) ? trim( (string) SCANGEO_FIXER_VERSION ) : '0';
+	}
+
 	/** Devuelve solo el número de versión más reciente (o '' si no se sabe), para mostrarlo en pantalla. */
 	public static function get_latest_version() {
 		$release = self::get_latest_release();
@@ -229,7 +252,7 @@ class ScanGEO_Updater {
 			}
 			return $transient;
 		}
-		$installed = trim( (string) SCANGEO_FIXER_VERSION );
+		$installed = self::installed_version();
 		$latest    = trim( (string) $release['version'] );
 		if ( version_compare( $latest, $installed, '>' ) ) {
 			$icon_url = defined( 'SCANGEO_FIXER_URL' ) ? SCANGEO_FIXER_URL . 'assets/icon.png' : '';

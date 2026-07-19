@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.9.9
+Stable tag: 1.9.10
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,10 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 1.9.10 =
+* Cambio de fondo: la comparación de versiones ya no usa la constante SCANGEO_FIXER_VERSION (definida al ejecutar el PHP, y potencialmente desincronizada de OPcache en algunos hostings justo después de actualizar), sino que lee la versión directamente de la cabecera del archivo en disco, igual que hace WordPress. Si el aviso fantasma seguía apareciendo tras cada actualización, esta era la explicación más probable.
+* Nuevo: si alguna vez la versión en memoria y la del archivo no coinciden, aparece un pequeño aviso "⚠ caché de PHP desincronizada" junto a la versión, con el detalle en el tooltip — para poder diagnosticarlo de un vistazo si volviera a pasar.
 
 = 1.9.9 =
 * Corrección de la causa real del aviso fantasma persistente: al actualizar un único plugin con el enlace individual "Actualízalo ahora" (en vez de la actualización en bloque con checkboxes), WordPress identifica el plugin con una clave distinta ('plugin', no 'plugins'). El código de limpieza de caché solo reconocía la segunda, así que nunca se disparaba tras una actualización individual. Ahora reconoce ambas.

@@ -3,7 +3,7 @@
  * Plugin Name:       scanGEO Fixer
  * Plugin URI:        https://scangeo.app
  * Description:       Sube el informe .md de scanGEO.app, mira tu nota GEO y su evolución, y repara los fallos SEO/GEO detectados: automáticamente cuando es seguro, o con una propuesta de IA que revisas y apruebas cuando toca contenido.
- * Version:           1.9.9
+ * Version:           1.9.10
  * Author:            scanGEO.app
  * Author URI:        https://scangeo.app
  * Text Domain:       scangeo-fixer
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SCANGEO_FIXER_VERSION', '1.9.9' );
+define( 'SCANGEO_FIXER_VERSION', '1.9.10' );
 define( 'SCANGEO_FIXER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCANGEO_FIXER_URL', plugin_dir_url( __FILE__ ) );
 

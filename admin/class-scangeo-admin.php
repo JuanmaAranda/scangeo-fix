@@ -666,10 +666,17 @@ class ScanGEO_Admin {
 		echo '<div class="scangeo-header">';
 		echo '<div class="scangeo-header-left">';
 		echo '<img src="' . esc_url( SCANGEO_FIXER_URL . 'assets/logo.png' ) . '" alt="scanGEO" class="scangeo-logo">';
-		echo '<span class="scangeo-version-badge">v' . esc_html( SCANGEO_FIXER_VERSION ) . '</span>';
+		$installed_real = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::installed_version() : SCANGEO_FIXER_VERSION;
+		echo '<span class="scangeo-version-badge">v' . esc_html( $installed_real ) . '</span>';
 		$latest = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::get_latest_version() : '';
-		if ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) {
+		if ( $latest && version_compare( $latest, $installed_real, '>' ) ) {
 			echo '<a href="' . esc_url( admin_url( 'update-core.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
+		}
+		if ( $installed_real !== SCANGEO_FIXER_VERSION ) {
+			// Esto solo puede pasar si el PHP en ejecución tiene en memoria
+			// una versión distinta a la que hay ahora en el archivo — señal
+			// de una caché de opcode (OPcache) desincronizada en el hosting.
+			echo '<span class="scangeo-version-badge" title="La versión en memoria (' . esc_attr( SCANGEO_FIXER_VERSION ) . ') no coincide con el archivo en disco (' . esc_attr( $installed_real ) . '). Reinicia PHP-FPM/OPcache en tu hosting si esto persiste.">⚠ caché de PHP desincronizada</span>';
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';
