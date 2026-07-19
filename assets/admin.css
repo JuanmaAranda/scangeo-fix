@@ -49,6 +49,8 @@
 	animation: scangeo-pulse 2s ease-in-out infinite;
 }
 .scangeo-update-pill:hover { background: #d98c05; color: #fff; }
+.scangeo-check-update-link { font-size: 12px; color: var(--scangeo-ink-soft); text-decoration: underline; }
+.scangeo-check-update-link:hover { color: var(--scangeo-blue); }
 @keyframes scangeo-pulse {
 	0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .35); }
 	50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }

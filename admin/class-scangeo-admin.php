@@ -607,6 +607,31 @@ class ScanGEO_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
+
+		// Botón "Comprobar ahora": borra la caché de GitHub y obliga a
+		// WordPress a recalcular su propio aviso de actualización (el de
+		// Plugins → "Hay una nueva versión disponible"), no solo el de aquí.
+		if ( isset( $_GET['scangeo_check_update'] ) && check_admin_referer( 'scangeo_check_update' ) ) {
+			delete_transient( 'scangeo_fixer_latest_release' );
+			if ( ! function_exists( 'wp_update_plugins' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/update.php';
+			}
+			wp_update_plugins();
+			wp_safe_redirect( remove_query_arg( array( 'scangeo_check_update', '_wpnonce' ) ) );
+			exit;
+		}
+
+		// Comprobación automática (silenciosa) al abrir el panel, pero como
+		// máximo una vez cada 10 minutos, para no ralentizar cada visita ni
+		// saturar la API de GitHub / WordPress.org.
+		if ( false === get_transient( 'scangeo_auto_check_lock' ) ) {
+			set_transient( 'scangeo_auto_check_lock', 1, 10 * MINUTE_IN_SECONDS );
+			if ( ! function_exists( 'wp_update_plugins' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/update.php';
+			}
+			wp_update_plugins();
+		}
+
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'report'; // phpcs:ignore
 		echo '<div class="wrap scangeo-wrap">';
 		echo '<div class="scangeo-header">';
@@ -617,6 +642,8 @@ class ScanGEO_Admin {
 		if ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) {
 			echo '<a href="' . esc_url( admin_url( 'plugins.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
 		}
+		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
+		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar ahora</a>';
 		echo '</div>';
 		echo '<a href="https://scangeo.app" target="_blank" rel="noopener" class="scangeo-header-link">scanGEO.app ↗</a>';
 		echo '<h1 class="screen-reader-text">scanGEO Fixer</h1>';
