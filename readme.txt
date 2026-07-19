@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,9 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 1.9.2 =
+* El comprobador de actualizaciones ya no depende de adjuntar el .zip a mano en un Release de GitHub: lo descarga directamente desde /dist dentro del propio repositorio. Publicar una versión nueva queda completamente automatizado.
 
 = 1.9.1 =
 * Configuración: el comprobador de actualizaciones apunta ya al repositorio real, github.com/JuanmaAranda/scangeo-fix.

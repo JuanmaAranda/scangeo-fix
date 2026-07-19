@@ -6,17 +6,13 @@
  * oficial): aparece en Plugins → "Hay una nueva versión disponible" con su
  * botón "Actualizar ahora", sin que el usuario tenga que hacerlo a mano.
  *
- * CÓMO CONFIGURARLO (una sola vez):
- * 1) Crea un repositorio en GitHub (puede ser público o privado) donde
- *    subir el código del plugin, por ejemplo "tu-usuario/scangeo-fixer".
- * 2) Cambia la constante REPO de aquí abajo por "tu-usuario/scangeo-fixer".
- * 3) Cada vez que haya una versión nueva: en GitHub, ve a "Releases" →
- *    "Draft a new release", pon como "tag" algo como "v1.9.0" (debe
- *    coincidir con la versión del plugin) y adjunta el .zip del plugin
- *    como archivo del release. Publica el release.
- * A partir de ahí, todos los sitios con el plugin instalado detectarán la
- * nueva versión (la comprobación se cachea 6 horas) y podrán actualizar
- * desde su propio wp-admin, como con cualquier otro plugin.
+ * CÓMO FUNCIONA (ya configurado para este plugin):
+ * El plugin descarga el .zip directamente desde /dist/scangeo-fixer.zip
+ * dentro de este mismo repositorio (usando el tag de cada versión), en vez
+ * de depender de los "adjuntos" de un Release de GitHub. Esto permite
+ * publicar una versión nueva subiendo el código y el .zip con un simple
+ * "git push" más la creación del Release (ambos automatizables), sin
+ * ningún paso manual en la web de GitHub.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -73,21 +69,11 @@ class ScanGEO_Updater {
 
 		$version = ltrim( (string) $data['tag_name'], 'vV' );
 
-		// Se prioriza un .zip adjuntado al release (empaquetado correctamente,
-		// con la carpeta "scangeo-fixer" dentro). Si no hay ninguno, se usa
-		// el zip automático del código fuente de GitHub como último recurso.
-		$zip_url = '';
-		if ( ! empty( $data['assets'] ) && is_array( $data['assets'] ) ) {
-			foreach ( $data['assets'] as $asset ) {
-				if ( ! empty( $asset['browser_download_url'] ) && '.zip' === substr( $asset['browser_download_url'], -4 ) ) {
-					$zip_url = $asset['browser_download_url'];
-					break;
-				}
-			}
-		}
-		if ( ! $zip_url && ! empty( $data['zipball_url'] ) ) {
-			$zip_url = $data['zipball_url'];
-		}
+		// El .zip del plugin se sube como un archivo más dentro del propio
+		// repositorio (en /dist), en vez de como "asset" adjunto al release.
+		// raw.githubusercontent.com sirve ese archivo tal cual, sin pasar
+		// por el sistema de adjuntos de GitHub.
+		$zip_url = 'https://raw.githubusercontent.com/' . self::REPO . '/' . rawurlencode( (string) $data['tag_name'] ) . '/dist/scangeo-fixer.zip';
 
 		$result = array(
 			'version'   => $version,
