@@ -32,6 +32,24 @@ class ScanGEO_Updater {
 		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'check_update' ) );
 		add_filter( 'plugins_api', array( __CLASS__, 'plugin_info' ), 20, 3 );
 		add_filter( 'upgrader_source_selection', array( __CLASS__, 'fix_folder_name' ), 10, 4 );
+		add_filter( 'plugin_row_meta', array( __CLASS__, 'row_meta' ), 10, 2 );
+	}
+
+	/**
+	 * Añade el enlace "Ver detalles" en la fila del plugin (listado de
+	 * Plugins), igual que hacen los plugins de WordPress.org. Abre el mismo
+	 * modal (thickbox) usando la información que ya devuelve plugin_info()
+	 * más arriba — no depende de estar en el repositorio oficial.
+	 */
+	public static function row_meta( $links, $file ) {
+		if ( self::PLUGIN_FILE !== $file ) {
+			return $links;
+		}
+		$details_url = self_admin_url(
+			'plugin-install.php?tab=plugin-information&plugin=' . self::SLUG . '&TB_iframe=true&width=600&height=550'
+		);
+		$links[] = '<a href="' . esc_url( $details_url ) . '" class="thickbox open-plugin-details-modal" aria-label="Más información sobre scanGEO Fixer">Ver detalles</a>';
+		return $links;
 	}
 
 	/** Devuelve solo el número de versión más reciente (o '' si no se sabe), para mostrarlo en pantalla. */
