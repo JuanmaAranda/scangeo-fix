@@ -54,8 +54,17 @@ class ScanGEO_Admin {
 	 * como máximo una vez cada 10 minutos, para no ralentizar cada visita
 	 * ni saturar la API de GitHub o de WordPress.org.
 	 */
+	/**
+	 * Comprobación automática (silenciosa) al abrir el panel del plugin, el
+	 * listado de Plugins o la pantalla de Actualizaciones, como máximo una
+	 * vez cada 10 minutos, para no ralentizar cada visita ni saturar la API
+	 * de GitHub o de WordPress.org.
+	 */
 	public static function maybe_auto_check_update() {
-		if ( empty( $_GET['page'] ) || 'scangeo-fixer' !== $_GET['page'] ) { // phpcs:ignore
+		global $pagenow;
+		$our_page  = ! empty( $_GET['page'] ) && 'scangeo-fixer' === $_GET['page']; // phpcs:ignore
+		$wp_screen = in_array( $pagenow, array( 'plugins.php', 'update-core.php' ), true );
+		if ( ! $our_page && ! $wp_screen ) {
 			return;
 		}
 		if ( false !== get_transient( 'scangeo_auto_check_lock' ) ) {

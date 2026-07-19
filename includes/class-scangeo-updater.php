@@ -116,12 +116,12 @@ class ScanGEO_Updater {
 			)
 		);
 		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-			set_transient( self::CACHE_KEY, '', 6 * HOUR_IN_SECONDS );
+			set_transient( self::CACHE_KEY, '', 15 * MINUTE_IN_SECONDS ); // Fallo: reintenta pronto, no en 6h.
 			return false;
 		}
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( empty( $data['tag_name'] ) ) {
-			set_transient( self::CACHE_KEY, '', 6 * HOUR_IN_SECONDS );
+			set_transient( self::CACHE_KEY, '', 15 * MINUTE_IN_SECONDS ); // Fallo: reintenta pronto, no en 6h.
 			return false;
 		}
 
@@ -209,6 +209,14 @@ class ScanGEO_Updater {
 		}
 		$release = self::get_latest_release();
 		if ( ! $release || empty( $release['zip_url'] ) ) {
+			// No se pudo comprobar (fallo de red, límite de peticiones de
+			// GitHub...). Por seguridad, se retira cualquier aviso de
+			// actualización que pudiera haber quedado de una comprobación
+			// anterior, en vez de dejarlo "colgado" indefinidamente: es
+			// preferible no avisar por un momento a mostrar un aviso falso.
+			if ( isset( $transient->response[ self::PLUGIN_FILE ] ) ) {
+				unset( $transient->response[ self::PLUGIN_FILE ] );
+			}
 			return $transient;
 		}
 		$installed = trim( (string) SCANGEO_FIXER_VERSION );

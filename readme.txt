@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.9.7
+Stable tag: 1.9.8
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,10 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 1.9.8 =
+* Corrección de fondo del aviso fantasma: la API de GitHub tiene un límite de peticiones por hora; si un chequeo fallaba por eso (u otro fallo de red), el plugin dejaba el aviso de actualización anterior "colgado" en vez de retirarlo. Ahora, ante cualquier fallo de comprobación, se retira el aviso en vez de conservar uno posiblemente obsoleto, y se reintenta a los 15 minutos en vez de 6 horas.
+* Corrección: la comprobación automática solo se disparaba al visitar la página del propio plugin; ahora también se dispara al visitar Plugins o Actualizaciones, que es donde más se suele ver el aviso.
 
 = 1.9.7 =
 * Corrección: aviso fantasma de "hay una nueva versión" que se quedaba mostrando la misma versión ya instalada. Ahora se limpia explícitamente la caché justo después de cada actualización, y se marca de forma explícita "no_update" cuando no la hay (WordPress dejaba de refrescarlo solo).
