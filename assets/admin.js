@@ -37,10 +37,36 @@
 	 * Repinta una fila entera a partir de un resultado (status, message,
 	 * proposal, undo) tanto si viene de "Reparar" como de "Aplicar"/"Deshacer".
 	 */
+	/**
+	 * Refresca el badge/boton de cada pagina afectada tras aplicar o
+	 * descartar una propuesta. Antes esto SOLO se pintaba en el HTML
+	 * generado por PHP al cargar la pagina: tras una respuesta AJAX (p.ej.
+	 * aplicar una propuesta de una sola pagina del flujo de "Generar
+	 * propuesta"), la lista de paginas se quedaba obsoleta y seguia
+	 * mostrando "Generar propuesta" en paginas que ya se habian corregido,
+	 * hasta que se recargaba la pantalla entera a mano.
+	 */
+	function markPagesResolved( $row, resolvedUrls ) {
+		if ( ! Array.isArray( resolvedUrls ) || ! resolvedUrls.length ) {
+			return;
+		}
+		resolvedUrls.forEach( function ( url ) {
+			var $li = $row.find( '.scangeo-pages li[data-url="' + url.replace( /"/g, '\\"' ) + '"]' );
+			if ( ! $li.length ) {
+				return;
+			}
+			$li.find( '.scangeo-generate-page' ).remove();
+			if ( ! $li.find( '.scangeo-badge-good' ).length ) {
+				$( '<span class="scangeo-badge scangeo-badge-good">Corregida</span>' ).appendTo( $li );
+			}
+		} );
+	}
+
 	function setRowState( $row, status, message, data ) {
 		data = data || {};
 		$row.attr( 'data-status', status );
 		$row.find( '.scangeo-icon' ).attr( 'class', 'scangeo-icon scangeo-icon-' + status );
+		markPagesResolved( $row, data.resolved_urls );
 
 		var $msgCell = $row.find( '.scangeo-result-msg' ).empty();
 		if ( message ) {

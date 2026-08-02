@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.2.5
+Stable tag: 2.2.6
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,9 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.2.6 =
+* Corrige dos fallos en el flujo de propuestas revisables pagina a pagina (FAQ, respuesta directa, ampliar contenido corto): 1) al generar una propuesta para una pagina nueva se perdian las propuestas pendientes de otras paginas del mismo fallo (se sobrescribian en vez de acumularse); 2) al aplicar una propuesta de una sola pagina, el fallo se marcaba como "Corregido" en su totalidad aunque quedaran muchas otras paginas afectadas sin tocar, y la lista de paginas no se actualizaba tras aplicar/descartar sin recargar la pantalla. Ahora las propuestas se acumulan correctamente, el estado distingue "corregido" (todas las paginas resueltas) de "corregido parcialmente" (algunas), y cada pagina se marca al instante tras aplicar o descartar su propuesta.
 
 = 2.2.5 =
 * Corrección crítica: la v2.2.4 llamaba a métodos internos (current_plugin_file(), supported_plugin_files()) que, por un fallo mío al editar el código, no llegaron a incluirse en el archivo publicado — provocaba un error fatal ("Call to undefined method") que WordPress solo evitaba desactivando el plugin automáticamente. Restaurados los tres métodos que resuelven la carpeta real de instalación (scangeo-fix, scangeo-fixer o scangeo-fix-X.Y.Z), y actualizados row_meta(), after_update(), installed_version() y fix_folder_name() para usarlos también, de forma consistente en todo el archivo.

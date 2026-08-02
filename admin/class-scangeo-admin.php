@@ -422,12 +422,23 @@ class ScanGEO_Admin {
 		if ( ! empty( $previous['resolved_urls'] ) && in_array( $url, (array) $previous['resolved_urls'], true ) ) {
 			wp_send_json_error( array( 'message' => 'Esta página ya tiene una propuesta aplicada.' ), 409 );
 		}
+		// OJO: hay que FUSIONAR con las propuestas pendientes que ya hubiera para
+		// otras páginas de este mismo fallo, no sobrescribir toda la fila. Antes,
+		// cada clic en "Generar propuesta" (una página a la vez) borraba las
+		// propuestas de las demás páginas que todavía no se habían revisado.
+		$proposal = isset( $previous['proposal'] ) && is_array( $previous['proposal'] ) ? $previous['proposal'] : array();
+		$proposal[ $url ] = $html;
 		$entry = array(
-			'status'   => 'suggested',
-			'message'  => 'Propuesta generada por scanGEO. Revísala y confírmala antes de insertarla.',
-			'proposal' => array( $url => $html ),
-			'time'     => current_time( 'mysql' ),
+			'status'        => 'suggested',
+			'message'       => 'Propuesta generada por scanGEO. Revísala y confírmala antes de insertarla.',
+			'proposal'      => $proposal,
+			'applied_count' => isset( $previous['applied_count'] ) ? (int) $previous['applied_count'] : 0,
+			'resolved_urls' => isset( $previous['resolved_urls'] ) && is_array( $previous['resolved_urls'] ) ? $previous['resolved_urls'] : array(),
+			'time'          => current_time( 'mysql' ),
 		);
+		if ( ! empty( $previous['undo'] ) ) {
+			$entry['undo'] = $previous['undo'];
+		}
 		$results[ $uid ] = $entry;
 		update_option( 'scangeo_results', $results, false );
 
@@ -478,7 +489,7 @@ class ScanGEO_Admin {
 		$handled = ( isset( $result['applied_urls'] ) && is_array( $result['applied_urls'] ) )
 			? array_intersect_key( $clean, array_flip( $result['applied_urls'] ) )
 			: $clean;
-		$entry   = self::merge_partial_result( $uid, $handled, $result, true );
+		$entry   = self::merge_partial_result( $uid, $handled, $result, true, $issue );
 
 		wp_send_json_success( array_merge( $entry, array( 'uid' => $uid ) ) );
 	}
@@ -501,7 +512,8 @@ class ScanGEO_Admin {
 			wp_send_json_success( array( 'uid' => $uid, 'status' => 'pending', 'message' => '' ) );
 		}
 
-		$entry = self::merge_partial_result( $uid, array( $url => true ), array( 'status' => 'discarded' ), false );
+		$issue = self::find_issue( $uid );
+		$entry = self::merge_partial_result( $uid, array( $url => true ), array( 'status' => 'discarded' ), false, $issue );
 		wp_send_json_success( array_merge( $entry, array( 'uid' => $uid ) ) );
 	}
 
@@ -517,13 +529,29 @@ class ScanGEO_Admin {
 	 * @param array  $result       Resultado de ScanGEO_Fixers::apply() o array('status'=>'discarded').
 	 * @param bool   $was_applied  true si $handled_urls se aplicó de verdad (no solo se descartó).
 	 */
-	private static function merge_partial_result( $uid, $handled_urls, $result, $was_applied ) {
+	private static function merge_partial_result( $uid, $handled_urls, $result, $was_applied, $issue = null ) {
 		$results       = get_option( 'scangeo_results', array() );
 		$prev          = ( isset( $results[ $uid ] ) && is_array( $results[ $uid ] ) ) ? $results[ $uid ] : array();
 		$proposal      = isset( $prev['proposal'] ) && is_array( $prev['proposal'] ) ? $prev['proposal'] : array();
 		$applied_count = isset( $prev['applied_count'] ) ? (int) $prev['applied_count'] : 0;
 		$undo          = isset( $prev['undo'] ) && is_array( $prev['undo'] ) ? $prev['undo'] : array();
 		$resolved_urls = isset( $prev['resolved_urls'] ) && is_array( $prev['resolved_urls'] ) ? array_values( array_unique( $prev['resolved_urls'] ) ) : array();
+
+		// Páginas realmente aplicables a este fallo (sin contar traducciones),
+		// para poder distinguir "fixed" (todas resueltas) de "partial" (solo
+		// algunas): antes se marcaba la fila entera como "fixed" en cuanto no
+		// quedaba ninguna propuesta PENDIENTE, aunque solo se hubiera generado y
+		// aplicado una propuesta de las N páginas afectadas (flujo de "Generar
+		// propuesta" página a página), dando a entender que el fallo estaba
+		// completamente resuelto cuando en realidad seguían pendientes casi todas.
+		$applicable_pages = array();
+		if ( $issue && ! empty( $issue['pages'] ) ) {
+			foreach ( $issue['pages'] as $pg ) {
+				if ( ! ScanGEO_Fixers::is_translated_url( $pg ) ) {
+					$applicable_pages[] = $pg;
+				}
+			}
+		}
 
 		// Limpieza defensiva: nunca se debe ofrecer (ni guardar) una propuesta
 		// para una URL traducida, aunque viniera de datos guardados por una
@@ -569,9 +597,18 @@ class ScanGEO_Admin {
 		}
 
 		if ( $applied_count > 0 ) {
+			$pending_pages  = array_diff( $applicable_pages, $resolved_urls );
+			$fully_resolved = empty( $applicable_pages ) || empty( $pending_pages );
+			if ( $fully_resolved ) {
+				$status  = 'fixed';
+				$message = $applied_count . ' propuesta(s) aplicada(s) en total.';
+			} else {
+				$status  = 'partial';
+				$message = $applied_count . ' propuesta(s) aplicada(s). Quedan ' . count( $pending_pages ) . ' página(s) sin revisar: pulsa "Generar propuesta" en cada una para seguir.';
+			}
 			$entry = array(
-				'status'        => 'fixed',
-				'message'       => $applied_count . ' propuesta(s) aplicada(s) en total.',
+				'status'        => $status,
+				'message'       => $message,
 				'applied_count' => $applied_count,
 				'resolved_urls' => $resolved_urls,
 				'time'          => current_time( 'mysql' ),
@@ -1195,9 +1232,14 @@ class ScanGEO_Admin {
 							<ul class="scangeo-pages">
 			<?php foreach ( array_slice( $issue['pages'], 0, 20 ) as $p ) :
 				$is_translated = ScanGEO_Fixers::is_translated_url( $p );
-				$is_resolved   = 'fixed' === $res_status || in_array( $p, $resolved_urls, true );
+				// OJO: hay que fijarse solo en resolved_urls (página a página), no en si
+				// el estado GLOBAL de la fila es "fixed"/"partial": con el flujo de
+				// "Generar propuesta" (una página cada vez), el estado de la fila
+				// puede pasar a fixed/partial habiendo tocado solo 1 de N páginas, y
+				// marcar aquí TODAS como "Corregida" era engañoso.
+				$is_resolved   = in_array( $p, $resolved_urls, true );
 				?>
-								<li<?php echo $is_translated ? ' class="scangeo-page-translated"' : ''; ?>>
+								<li<?php echo $is_translated ? ' class="scangeo-page-translated"' : ''; ?> data-url="<?php echo esc_attr( $p ); ?>">
 									<a href="<?php echo esc_url( $p ); ?>" target="_blank" rel="noopener"><?php echo esc_html( wp_parse_url( $p, PHP_URL_PATH ) ? wp_parse_url( $p, PHP_URL_PATH ) : $p ); ?></a>
 					<?php if ( $browser_proposal_type && ! $is_translated && ! $is_resolved ) : ?><button type="button" class="button-link scangeo-generate-page" data-url="<?php echo esc_attr( $p ); ?>" data-proposal-type="<?php echo esc_attr( $browser_proposal_type ); ?>">Generar propuesta</button><?php endif; ?>
 					<?php if ( $is_resolved ) : ?><span class="scangeo-badge scangeo-badge-good">Corregida</span><?php endif; ?>
