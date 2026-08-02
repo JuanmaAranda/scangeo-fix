@@ -101,10 +101,20 @@ class ScanGEO_Updater {
 		}
 		self::$initialized = true;
 
-		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'check_update' ) );
+		// Prioridad muy alta (PHP_INT_MAX): hay plugins de gestión de
+		// actualizaciones (p. ej. los que auto-actualizan todo el sitio) que
+		// también enganchan estos mismos filtros y pueden reconstruir o
+		// limpiar el array 'response' quedándose solo con los plugins que
+		// ellos reconocen. Si ellos se ejecutan después de nosotros, nuestra
+		// entrada desaparece antes de llegar a la pantalla de Actualizaciones,
+		// aunque get_latest_release() haya funcionado perfectamente (por eso
+		// el aviso sí aparecía dentro del propio panel de scanGEO Fixer, pero
+		// no en Escritorio > Actualizaciones). Ejecutándonos los últimos nos
+		// aseguramos de que nuestra entrada sea la que queda.
+		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'check_update' ), PHP_INT_MAX );
 		// La pantalla nativa puede reutilizar un transient ya creado. Al leerlo,
 		// añadimos también nuestra actualización para que coincida con el aviso.
-		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'check_update' ) );
+		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'check_update' ), PHP_INT_MAX );
 		add_filter( 'plugins_api', array( __CLASS__, 'plugin_info' ), 20, 3 );
 		add_filter( 'upgrader_source_selection', array( __CLASS__, 'fix_folder_name' ), 10, 4 );
 		add_filter( 'plugin_row_meta', array( __CLASS__, 'row_meta' ), 10, 2 );
