@@ -25,6 +25,7 @@ class ScanGEO_Admin {
 		add_action( 'wp_ajax_scangeo_verify_key', array( __CLASS__, 'ajax_verify_key' ) );
 		add_action( 'wp_ajax_scangeo_save_model', array( __CLASS__, 'ajax_save_model' ) );
 		add_action( 'wp_ajax_scangeo_use_included', array( __CLASS__, 'ajax_use_included' ) );
+		add_action( 'wp_ajax_scangeo_test_connection', array( __CLASS__, 'ajax_test_connection' ) );
 	}
 
 	/**
@@ -55,17 +56,8 @@ class ScanGEO_Admin {
 	 * como máximo una vez cada 10 minutos, para no ralentizar cada visita
 	 * ni saturar la API de GitHub o de WordPress.org.
 	 */
-	/**
-	 * Comprobación automática (silenciosa) al abrir el panel del plugin, el
-	 * listado de Plugins o la pantalla de Actualizaciones, como máximo una
-	 * vez cada 10 minutos, para no ralentizar cada visita ni saturar la API
-	 * de GitHub o de WordPress.org.
-	 */
 	public static function maybe_auto_check_update() {
-		global $pagenow;
-		$our_page  = ! empty( $_GET['page'] ) && 'scangeo-fixer' === $_GET['page']; // phpcs:ignore
-		$wp_screen = in_array( $pagenow, array( 'plugins.php', 'update-core.php' ), true );
-		if ( ! $our_page && ! $wp_screen ) {
+		if ( empty( $_GET['page'] ) || 'scangeo-fixer' !== $_GET['page'] ) { // phpcs:ignore
 			return;
 		}
 		if ( false !== get_transient( 'scangeo_auto_check_lock' ) ) {
@@ -588,7 +580,6 @@ class ScanGEO_Admin {
 		) );
 	}
 
-	/** Guarda el modelo elegido en el desplegable. */
 	/** Cambia el proveedor a "IA incluida" (gratis, con límite mensual) sin necesitar clave propia. */
 	public static function ajax_use_included() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -610,6 +601,28 @@ class ScanGEO_Admin {
 		) );
 	}
 
+	/**
+	 * Prueba la conexión con el proveedor de IA configurado (incluida uno
+	 * propio) y devuelve un diagnóstico claro. Pensado para el botón
+	 * "Comprobar conexión" de Ajustes: si las propuestas de contenido fallan
+	 * con errores de red (el típico "cURL error 28: Connection timed out"
+	 * de hostings con conexiones salientes limitadas), este botón lo detecta
+	 * sin tener que interpretarlo desde el mensaje de un fallo de reparación.
+	 */
+	public static function ajax_test_connection() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Permisos insuficientes.' ), 403 );
+		}
+		check_ajax_referer( 'scangeo_fix', 'nonce' );
+
+		$result = ScanGEO_AI::test_connection();
+		if ( empty( $result['success'] ) ) {
+			wp_send_json_error( $result );
+		}
+		wp_send_json_success( $result );
+	}
+
+	/** Guarda el modelo elegido en el desplegable. */
 	public static function ajax_save_model() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => 'Permisos insuficientes.' ), 403 );
@@ -688,17 +701,10 @@ class ScanGEO_Admin {
 		echo '<div class="scangeo-header">';
 		echo '<div class="scangeo-header-left">';
 		echo '<img src="' . esc_url( SCANGEO_FIXER_URL . 'assets/logo.png' ) . '" alt="scanGEO" class="scangeo-logo">';
-		$installed_real = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::installed_version() : SCANGEO_FIXER_VERSION;
-		echo '<span class="scangeo-version-badge">v' . esc_html( $installed_real ) . '</span>';
+		echo '<span class="scangeo-version-badge">v' . esc_html( SCANGEO_FIXER_VERSION ) . '</span>';
 		$latest = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::get_latest_version() : '';
-		if ( $latest && version_compare( $latest, $installed_real, '>' ) ) {
+		if ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) {
 			echo '<a href="' . esc_url( admin_url( 'update-core.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
-		}
-		if ( $installed_real !== SCANGEO_FIXER_VERSION ) {
-			// Esto solo puede pasar si el PHP en ejecución tiene en memoria
-			// una versión distinta a la que hay ahora en el archivo — señal
-			// de una caché de opcode (OPcache) desincronizada en el hosting.
-			echo '<span class="scangeo-version-badge" title="La versión en memoria (' . esc_attr( SCANGEO_FIXER_VERSION ) . ') no coincide con el archivo en disco (' . esc_attr( $installed_real ) . '). Reinicia PHP-FPM/OPcache en tu hosting si esto persiste.">⚠ caché de PHP desincronizada</span>';
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';
@@ -856,6 +862,13 @@ class ScanGEO_Admin {
 					</td>
 				</tr>
 			</table>
+			</div>
+
+			<div class="scangeo-connection-check">
+				<h2>Conexión con el proveedor de IA</h2>
+				<p>Si al pulsar «Reparar» ves errores como <code>cURL error 28: Connection timed out</code>, no es un problema de permisos: significa que tu servidor no está pudiendo completar la conexión saliente hacia el proveedor de IA (a menudo por un límite del propio hosting). Comprueba aquí si la conexión funciona ahora mismo.</p>
+				<button type="button" class="button" id="scangeo-test-connection">Comprobar conexión</button>
+				<span id="scangeo-connection-status" class="scangeo-key-status"></span>
 			</div>
 
 			<form method="post" action="options.php">
