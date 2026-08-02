@@ -786,6 +786,10 @@ class ScanGEO_Admin {
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';
+		$check_error = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::get_last_check_error() : '';
+		if ( $check_error && ! ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) ) {
+			echo '<span class="scangeo-update-check-error" title="' . esc_attr( $check_error ) . '">⚠ No se pudo comprobar si hay versión nueva</span>';
+		}
 		echo '</div>';
 		echo '<a href="https://scangeo.app" target="_blank" rel="noopener" class="scangeo-header-link">scanGEO.app ↗</a>';
 		echo '<h1 class="screen-reader-text">scanGEO Fixer</h1>';

@@ -26,6 +26,7 @@ class ScanGEO_Updater {
 
 	const CACHE_KEY       = 'scangeo_fixer_latest_release';
 	const CACHE_KEY_ALL   = 'scangeo_fixer_all_releases';
+	const CHECK_ERROR_KEY = 'scangeo_fixer_update_check_error';
 	// Identificador definitivo: tanto la carpeta instalada como el ZIP son
 	// scangeo-fix. Se conserva la ruta antigua solo para migrar instalaciones
 	// que se actualizaron antes de este cambio.
@@ -34,6 +35,62 @@ class ScanGEO_Updater {
 	const SLUG               = 'scangeo-fix';
 
 	private static $initialized = false;
+
+	/** Igual que en ScanGEO_AI: fuerza este timeout por encima de lo que el hosting imponga vía 'http_request_timeout'. */
+	const REQUEST_TIMEOUT = 20;
+
+	/** Fragmentos de mensaje que identifican un fallo de red transitorio (no un fallo real de la API de GitHub). */
+	const TRANSIENT_ERROR_PATTERNS = array(
+		'cURL error 28',
+		'cURL error 7',
+		'cURL error 6',
+		'cURL error 35',
+		'Connection timed out',
+		'Operation timed out',
+		'Could not resolve host',
+		'Connection reset',
+	);
+
+	public static function force_timeout( $seconds ) {
+		return self::REQUEST_TIMEOUT;
+	}
+
+	/** Guarda el motivo del último fallo al comprobar actualizaciones, para poder explicarlo en el panel en vez de dejarlo en silencio. */
+	private static function remember_check_error( $message ) {
+		set_transient( self::CHECK_ERROR_KEY, $message, 15 * MINUTE_IN_SECONDS );
+	}
+
+	/** Motivo del último fallo al comprobar actualizaciones (vacío si la última comprobación fue bien). */
+	public static function get_last_check_error() {
+		$msg = get_transient( self::CHECK_ERROR_KEY );
+		return $msg ? (string) $msg : '';
+	}
+
+	/**
+	 * wp_remote_get() forzando REQUEST_TIMEOUT de verdad (algunos hostings
+	 * enganchan 'http_request_timeout' para forzar un límite fijo, típicamente
+	 * 10s, en todas las peticiones salientes de cualquier plugin) y
+	 * reintentando una vez si el primer intento falla por un error de red
+	 * transitorio. Sin esto, la comprobación de actualizaciones se queda
+	 * "en blanco" (sin aviso y sin error visible) en cuanto el hosting corta
+	 * la conexión hacia la API de GitHub.
+	 */
+	private static function remote_get_with_retry( $url, $args ) {
+		add_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
+		$response = wp_remote_get( $url, $args );
+		if ( is_wp_error( $response ) ) {
+			$msg = $response->get_error_message();
+			foreach ( self::TRANSIENT_ERROR_PATTERNS as $pattern ) {
+				if ( false !== stripos( $msg, $pattern ) ) {
+					usleep( 800000 );
+					$response = wp_remote_get( $url, $args );
+					break;
+				}
+			}
+		}
+		remove_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
+		return $response;
+	}
 
 	public static function init() {
 		// Guarda de seguridad: si algo llegara a llamar a init() más de una
@@ -150,22 +207,30 @@ class ScanGEO_Updater {
 			return $cached ? $cached : false;
 		}
 
-		$response = wp_remote_get(
+		$response = self::remote_get_with_retry(
 			'https://api.github.com/repos/' . self::REPO . '/releases/latest',
 			array(
 				'headers' => array( 'Accept' => 'application/vnd.github+json' ),
-				'timeout' => 10,
+				'timeout' => self::REQUEST_TIMEOUT,
 			)
 		);
-		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+		if ( is_wp_error( $response ) ) {
+			self::remember_check_error( 'No se pudo contactar con GitHub para comprobar actualizaciones: ' . $response->get_error_message() . '. Esto suele deberse a que tu hosting corta las conexiones salientes hacia servicios externos.' );
+			set_transient( self::CACHE_KEY, '', 15 * MINUTE_IN_SECONDS ); // Fallo: reintenta pronto, no en 6h.
+			return false;
+		}
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			self::remember_check_error( 'GitHub respondió con un error al comprobar actualizaciones (HTTP ' . (int) wp_remote_retrieve_response_code( $response ) . ').' );
 			set_transient( self::CACHE_KEY, '', 15 * MINUTE_IN_SECONDS ); // Fallo: reintenta pronto, no en 6h.
 			return false;
 		}
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( empty( $data['tag_name'] ) ) {
+			self::remember_check_error( 'GitHub respondió, pero sin datos de versión reconocibles.' );
 			set_transient( self::CACHE_KEY, '', 15 * MINUTE_IN_SECONDS ); // Fallo: reintenta pronto, no en 6h.
 			return false;
 		}
+		delete_transient( self::CHECK_ERROR_KEY );
 
 		$version = trim( ltrim( (string) $data['tag_name'], 'vV' ) );
 
@@ -198,11 +263,11 @@ class ScanGEO_Updater {
 		if ( false !== $cached ) {
 			return is_array( $cached ) ? $cached : array();
 		}
-		$response = wp_remote_get(
+		$response = self::remote_get_with_retry(
 			'https://api.github.com/repos/' . self::REPO . '/releases?per_page=15',
 			array(
 				'headers' => array( 'Accept' => 'application/vnd.github+json' ),
-				'timeout' => 10,
+				'timeout' => self::REQUEST_TIMEOUT,
 			)
 		);
 		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {

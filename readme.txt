@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.2.1
+Stable tag: 2.2.2
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,9 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.2.2 =
+* Corrección importante: la propia comprobación de actualizaciones (la llamada a la API de GitHub) usaba un timeout fijo de 10s sin protección, así que en hostings que limitan las conexiones salientes a ese tiempo, la comprobación fallaba en silencio: no aparecía ni el aviso de nueva versión ni ningún error, simplemente el plugin no salía en la pantalla de actualizaciones. Ahora usa el mismo blindaje de timeout y reintento que ya tenían las llamadas a IA, y si aun así falla, se muestra un aviso explicando el motivo junto al número de versión.
 
 = 2.2.1 =
 * Corrección importante: el ZIP de la release se empaquetaba con rutas de Windows (barra invertida) y sin una carpeta raíz real, así que WordPress no podía identificar una única carpeta al extraerlo y cada actualización acababa en un directorio nuevo (scangeo-fix-2.1.9, scangeo-fix-2.2.0...). El paquete ahora usa rutas estándar (barra normal) con una sola carpeta `scangeo-fix/`, para que las actualizaciones futuras se instalen siempre en el mismo sitio.

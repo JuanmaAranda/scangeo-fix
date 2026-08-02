@@ -51,6 +51,7 @@
 .scangeo-update-pill:hover { background: #d98c05; color: #fff; }
 .scangeo-check-update-link { font-size: 12px; color: var(--scangeo-ink-soft); text-decoration: underline; }
 .scangeo-check-update-link:hover { color: var(--scangeo-blue); }
+.scangeo-update-check-error { font-size: 12px; color: #b45309; cursor: help; margin-left: 6px; }
 
 #scangeo-included-quota {
 	display: inline-block;
