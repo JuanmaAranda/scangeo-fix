@@ -41,6 +41,9 @@ class ScanGEO_Updater {
 		self::$initialized = true;
 
 		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'check_update' ) );
+		// La pantalla nativa puede reutilizar un transient ya creado. Al leerlo,
+		// añadimos también nuestra actualización para que coincida con el aviso.
+		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'check_update' ) );
 		add_filter( 'plugins_api', array( __CLASS__, 'plugin_info' ), 20, 3 );
 		add_filter( 'upgrader_source_selection', array( __CLASS__, 'fix_folder_name' ), 10, 4 );
 		add_filter( 'plugin_row_meta', array( __CLASS__, 'row_meta' ), 10, 2 );
@@ -282,6 +285,32 @@ class ScanGEO_Updater {
 				'package'     => '',
 			);
 		}
+		return $transient;
+	}
+
+	/** Fuerza y persiste la comprobación para Escritorio > Actualizaciones. */
+	public static function force_update_check() {
+		delete_transient( self::CACHE_KEY );
+		delete_transient( self::CACHE_KEY_ALL );
+		delete_site_transient( 'update_plugins' );
+
+		if ( ! function_exists( 'wp_update_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/update.php';
+		}
+		wp_update_plugins();
+
+		$transient = get_site_transient( 'update_plugins' );
+		if ( ! is_object( $transient ) ) {
+			$transient = new stdClass();
+		}
+		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+			$transient->response = array();
+		}
+		if ( ! isset( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+			$transient->no_update = array();
+		}
+		$transient = self::check_update( $transient );
+		set_site_transient( 'update_plugins', $transient );
 		return $transient;
 	}
 

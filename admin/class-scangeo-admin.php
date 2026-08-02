@@ -41,14 +41,9 @@ class ScanGEO_Admin {
 		}
 		check_admin_referer( 'scangeo_check_update' );
 
-		delete_transient( 'scangeo_fixer_latest_release' );
-		if ( ! function_exists( 'wp_update_plugins' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/update.php';
-		}
-		delete_site_transient( 'update_plugins' ); // Fuerza el recálculo completo, no solo un "top up".
-		wp_update_plugins();
+		ScanGEO_Updater::force_update_check();
 
-		wp_safe_redirect( remove_query_arg( array( 'scangeo_check_update', '_wpnonce' ) ) );
+		wp_safe_redirect( admin_url( 'update-core.php?force-check=1' ) );
 		exit;
 	}
 
@@ -770,8 +765,9 @@ class ScanGEO_Admin {
 		echo '<img src="' . esc_url( SCANGEO_FIXER_URL . 'assets/logo.png' ) . '" alt="scanGEO" class="scangeo-logo">';
 		echo '<span class="scangeo-version-badge">v' . esc_html( SCANGEO_FIXER_VERSION ) . '</span>';
 		$latest = class_exists( 'ScanGEO_Updater' ) ? ScanGEO_Updater::get_latest_version() : '';
+		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		if ( $latest && version_compare( $latest, SCANGEO_FIXER_VERSION, '>' ) ) {
-			echo '<a href="' . esc_url( admin_url( 'update-core.php' ) ) . '" class="scangeo-update-pill">Nueva versión disponible: v' . esc_html( $latest ) . ' →</a>';
+			echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-update-pill">Nueva versi&oacute;n disponible: v' . esc_html( $latest ) . ' &rarr;</a>';
 		}
 		$check_url = wp_nonce_url( add_query_arg( 'scangeo_check_update', '1' ), 'scangeo_check_update' );
 		echo '<a href="' . esc_url( $check_url ) . '" class="scangeo-check-update-link">Comprobar actualización del plugin</a>';
