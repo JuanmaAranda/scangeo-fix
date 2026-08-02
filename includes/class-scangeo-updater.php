@@ -331,14 +331,25 @@ class ScanGEO_Updater {
 			// actualización que pudiera haber quedado de una comprobación
 			// anterior, en vez de dejarlo "colgado" indefinidamente: es
 			// preferible no avisar por un momento a mostrar un aviso falso.
-			unset( $transient->response[ self::PLUGIN_FILE ], $transient->response[ self::LEGACY_PLUGIN_FILE ] );
+			foreach ( self::supported_plugin_files() as $plugin_file ) {
+				unset( $transient->response[ $plugin_file ] );
+			}
 			return $transient;
 		}
 		$installed = self::installed_version();
 		$latest    = trim( (string) $release['version'] );
 		if ( version_compare( $latest, $installed, '>' ) ) {
 			$icon_url = defined( 'SCANGEO_FIXER_URL' ) ? SCANGEO_FIXER_URL . 'assets/icon.png' : '';
-			$installed_file = file_exists( WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE ) ? self::PLUGIN_FILE : self::LEGACY_PLUGIN_FILE;
+			// OJO: tiene que ser current_plugin_file(), no solo PLUGIN_FILE/LEGACY_PLUGIN_FILE.
+			// get_plugin_updates() (wp-admin/includes/update.php) solo muestra una
+			// actualizacion si la clave coincide EXACTAMENTE con una de las rutas que
+			// devuelve get_plugins() para los plugins realmente instalados. Si el
+			// sitio quedo instalado en una carpeta con el numero de version en el
+			// nombre (scangeo-fix-2.2.0, herencia de actualizaciones manuales
+			// anteriores), ni PLUGIN_FILE ('scangeo-fix/...') ni LEGACY_PLUGIN_FILE
+			// ('scangeo-fixer/...') existen, asi que WordPress descarta el aviso en
+			// silencio aunque el aviso interno del plugin sí lo detecte bien.
+			$installed_file = self::current_plugin_file();
 			$transient->response[ $installed_file ] = (object) array(
 				'slug'        => self::SLUG,
 				'plugin'      => $installed_file,
@@ -353,11 +364,13 @@ class ScanGEO_Updater {
 			// explícitamente cualquier entrada previa para este plugin
 			// (si no, un aviso de una comprobación anterior podría quedarse
 			// "pegado" en el transient aunque ya no aplique).
-			unset( $transient->response[ self::PLUGIN_FILE ], $transient->response[ self::LEGACY_PLUGIN_FILE ] );
+			foreach ( self::supported_plugin_files() as $plugin_file ) {
+				unset( $transient->response[ $plugin_file ] );
+			}
 			if ( ! isset( $transient->no_update ) ) {
 				$transient->no_update = array();
 			}
-			$installed_file = file_exists( WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE ) ? self::PLUGIN_FILE : self::LEGACY_PLUGIN_FILE;
+			$installed_file = self::current_plugin_file();
 			$transient->no_update[ $installed_file ] = (object) array(
 				'slug'        => self::SLUG,
 				'plugin'      => $installed_file,
