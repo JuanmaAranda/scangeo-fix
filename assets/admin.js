@@ -76,9 +76,123 @@
 		$( '#scangeo-fixed-count' ).text( fixed );
 	}
 
+	function browserProposalType( issueId ) {
+		var types = {
+			'geo.faq_or_qa': 'faq',
+			'geo.direct_answer': 'direct_answer',
+			'content.body_length': 'content_expansion'
+		};
+		return types[ issueId ] || '';
+	}
+
+	function proposalHtml( proposal ) {
+		var $wrap = $( '<div></div>' );
+		if ( proposal.title ) {
+			$( '<h2></h2>' ).text( proposal.title ).appendTo( $wrap );
+		}
+		if ( proposal.introduction ) {
+			$( '<p></p>' ).text( proposal.introduction ).appendTo( $wrap );
+		}
+		if ( Array.isArray( proposal.faq ) ) {
+			proposal.faq.forEach( function ( item ) {
+				if ( item && item.question && item.answer ) {
+					$( '<h3></h3>' ).text( item.question ).appendTo( $wrap );
+					$( '<p></p>' ).text( item.answer ).appendTo( $wrap );
+				}
+			} );
+		}
+		if ( proposal.directAnswer && proposal.directAnswer.answer ) {
+			if ( proposal.directAnswer.heading ) {
+				$( '<h2></h2>' ).text( proposal.directAnswer.heading ).appendTo( $wrap );
+			}
+			$( '<p></p>' ).text( proposal.directAnswer.answer ).appendTo( $wrap );
+		}
+		if ( Array.isArray( proposal.expansion ) ) {
+			proposal.expansion.forEach( function ( section ) {
+				if ( ! section || ! section.heading || ! Array.isArray( section.paragraphs ) ) {
+					return;
+				}
+				$( '<h2></h2>' ).text( section.heading ).appendTo( $wrap );
+				section.paragraphs.forEach( function ( paragraph ) {
+					if ( paragraph ) {
+						$( '<p></p>' ).text( paragraph ).appendTo( $wrap );
+					}
+				} );
+			} );
+		}
+		return $wrap.html();
+	}
+
+	function browserProposalError( response, body ) {
+		var messages = {
+			invalid_url: 'La URL de la pÃ¡gina no es vÃ¡lida para generar una propuesta.',
+			page_unavailable: 'scanGEO no pudo recuperar esta pÃ¡gina como HTML pÃºblico.',
+			rate_limited: 'Se ha alcanzado el lÃ­mite temporal de solicitudes. IntÃ©ntalo mÃ¡s tarde.',
+			service_busy: 'El servicio de propuestas estÃ¡ temporalmente ocupado. IntÃ©ntalo mÃ¡s tarde.',
+			quota_exceeded: 'Se ha agotado la cuota gratuita de propuestas de este dominio.',
+			ai_error: 'No se pudo generar la propuesta ahora mismo. No se ha modificado la pÃ¡gina.',
+			server_error: 'scanGEO ha devuelto un error temporal. No se ha modificado la pÃ¡gina.'
+		};
+		if ( body && body.error && messages[ body.error ] ) {
+			return messages[ body.error ];
+		}
+		return 'No se pudo solicitar la propuesta a scanGEO (' + response.status + ').';
+	}
+
+	function requestBrowserProposal( $row, type ) {
+		var url = $row.find( '.scangeo-pages li:not(.scangeo-page-translated) a' ).first().attr( 'href' );
+		var uid = $row.attr( 'data-uid' ) || '';
+		if ( ! url ) {
+			setRowState( $row, 'failed', 'El informe no incluye una URL editable para esta propuesta.' );
+			return $.Deferred().reject().promise();
+		}
+		setRowState( $row, 'fixing', 'Solicitando propuesta a scanGEOâ€¦' );
+		return window.fetch( scangeoFixer.browserProposalEndpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify( {
+				url: url,
+				proposalType: type,
+				locale: ( document.documentElement.lang || 'es' ).replace( '_', '-' )
+			} )
+		} ).then( function ( response ) {
+			return response.json().catch( function () { return {}; } ).then( function ( body ) {
+				if ( ! response.ok ) {
+					throw new Error( browserProposalError( response, body ) );
+				}
+				return body;
+			} );
+		} ).then( function ( result ) {
+			var html = proposalHtml( result.proposal || {} );
+			if ( ! html || ! $.trim( $( '<div></div>' ).html( html ).text() ) ) {
+				throw new Error( 'scanGEO ha devuelto una propuesta vacÃ­a.' );
+			}
+			return $.post( scangeoFixer.ajaxUrl, {
+				action: 'scangeo_store_browser_proposal',
+				nonce: scangeoFixer.nonce,
+				uid: uid,
+				url: url,
+				proposal_type: type,
+				html: html
+			} );
+		} ).then( function ( res ) {
+			if ( res && res.success && res.data ) {
+				setRowState( $row, res.data.status, res.data.message, res.data );
+			} else {
+				throw new Error( res && res.data && res.data.message ? res.data.message : scangeoFixer.i18n.failed );
+			}
+		} ).catch( function ( error ) {
+			setRowState( $row, 'failed', error && error.message ? error.message : scangeoFixer.i18n.failed );
+		} );
+	}
+
 	function fixIssue( $row ) {
 		var issueId = $row.data( 'issue' );
 		var uid     = $row.attr( 'data-uid' ) || '';
+		var browserType = browserProposalType( issueId );
+		if ( browserType ) {
+			return requestBrowserProposal( $row, browserType );
+		}
 		setRowState( $row, 'fixing', scangeoFixer.i18n.fixing );
 
 		return $.post( scangeoFixer.ajaxUrl, {
@@ -416,7 +530,7 @@
 		// necesitan revisión humana, no se aplican en bloque.
 		var rows = $( '#scangeo-issues .scangeo-issue' ).filter( function () {
 			var st = $( this ).attr( 'data-status' );
-			return st !== 'fixed' && st !== 'suggested' && st !== 'manual';
+			return st !== 'fixed' && st !== 'suggested' && st !== 'manual' && ! browserProposalType( $( this ).data( 'issue' ) );
 		} ).toArray();
 
 		( function next() {

@@ -19,6 +19,7 @@ class ScanGEO_Admin {
 		add_action( 'admin_init', array( __CLASS__, 'maybe_auto_check_update' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'wp_ajax_scangeo_fix_issue', array( __CLASS__, 'ajax_fix_issue' ) );
+		add_action( 'wp_ajax_scangeo_store_browser_proposal', array( __CLASS__, 'ajax_store_browser_proposal' ) );
 		add_action( 'wp_ajax_scangeo_apply_suggestion', array( __CLASS__, 'ajax_apply_suggestion' ) );
 		add_action( 'wp_ajax_scangeo_discard_suggestion', array( __CLASS__, 'ajax_discard_suggestion' ) );
 		add_action( 'wp_ajax_scangeo_undo_fix', array( __CLASS__, 'ajax_undo_fix' ) );
@@ -132,6 +133,7 @@ class ScanGEO_Admin {
 		$opts = get_option( 'scangeo_settings', array() );
 		wp_localize_script( 'scangeo-admin', 'scangeoFixer', array(
 			'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+			'browserProposalEndpoint' => 'https://scangeo.app/api/public/wp-plugin/proposals',
 			'nonce'     => wp_create_nonce( 'scangeo_fix' ),
 			'keySaved'  => ! empty( $opts['api_key'] ),
 			'provider'  => ! empty( $opts['provider'] ) ? $opts['provider'] : 'anthropic',
@@ -385,6 +387,51 @@ class ScanGEO_Admin {
 		}
 
 		wp_send_json_success( array_merge( $result, array( 'uid' => $key ) ) );
+	}
+
+	/**
+	 * Guarda una propuesta que el navegador ha solicitado directamente a
+	 * scanGEO.app. PHP no llama al proveedor de IA: asÃ­ los hostings que
+	 * limitan conexiones salientes no bloquean la generaciÃ³n.
+	 */
+	public static function ajax_store_browser_proposal() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Permisos insuficientes.' ), 403 );
+		}
+		check_ajax_referer( 'scangeo_fix', 'nonce' );
+
+		$uid   = isset( $_POST['uid'] ) ? sanitize_text_field( wp_unslash( $_POST['uid'] ) ) : '';
+		$url   = isset( $_POST['url'] ) ? esc_url_raw( wp_unslash( $_POST['url'] ) ) : '';
+		$type  = isset( $_POST['proposal_type'] ) ? sanitize_key( wp_unslash( $_POST['proposal_type'] ) ) : '';
+		$html  = isset( $_POST['html'] ) ? wp_kses_post( wp_unslash( $_POST['html'] ) ) : '';
+		$issue = self::find_issue( $uid );
+		$types = array(
+			'geo.faq_or_qa'      => 'faq',
+			'geo.direct_answer'  => 'direct_answer',
+			'content.body_length' => 'content_expansion',
+		);
+
+		if ( ! $issue || empty( $types[ $issue['id'] ] ) || $types[ $issue['id'] ] !== $type ) {
+			wp_send_json_error( array( 'message' => 'La propuesta no corresponde al fallo del informe.' ), 400 );
+		}
+		if ( '' === $url || empty( $issue['pages'] ) || ! in_array( $url, $issue['pages'], true ) || ScanGEO_Fixers::is_translated_url( $url ) ) {
+			wp_send_json_error( array( 'message' => 'La URL de la propuesta no es aplicable.' ), 400 );
+		}
+		if ( '' === trim( wp_strip_all_tags( $html ) ) || strlen( $html ) > 12000 ) {
+			wp_send_json_error( array( 'message' => 'El contenido de la propuesta no es vÃ¡lido.' ), 400 );
+		}
+
+		$results = get_option( 'scangeo_results', array() );
+		$entry = array(
+			'status'   => 'suggested',
+			'message'  => 'Propuesta generada por scanGEO. RevÃ­sala y confÃ­rmala antes de insertarla.',
+			'proposal' => array( $url => $html ),
+			'time'     => current_time( 'mysql' ),
+		);
+		$results[ $uid ] = $entry;
+		update_option( 'scangeo_results', $results, false );
+
+		wp_send_json_success( array_merge( $entry, array( 'uid' => $uid ) ) );
 	}
 
 	/** Encuentra un issue del informe guardado por su uid. */

@@ -18,6 +18,13 @@ class ScanGEO_Frontend {
 		add_filter( 'robots_txt', array( __CLASS__, 'robots_txt' ), 20, 2 );
 		add_filter( 'wp_sitemaps_enabled', array( __CLASS__, 'sitemaps_enabled' ) );
 		add_filter( 'pre_get_document_title', array( __CLASS__, 'seo_title' ), 20 );
+		// Integración no invasiva con Rank Math: completamos sus datos en vez
+		// de imprimir una segunda batería de metas o schema en paralelo.
+		add_filter( 'rank_math/json_ld', array( __CLASS__, 'rank_math_json_ld' ), 99, 2 );
+		add_filter( 'rank_math/opengraph/facebook/og_description', array( __CLASS__, 'rank_math_og_description' ), 99 );
+		add_filter( 'rank_math/opengraph/facebook/image', array( __CLASS__, 'rank_math_og_image' ), 99 );
+		add_filter( 'rank_math/opengraph/twitter/og_description', array( __CLASS__, 'rank_math_og_description' ), 99 );
+		add_filter( 'rank_math/opengraph/twitter/image', array( __CLASS__, 'rank_math_og_image' ), 99 );
 		add_action( 'init', array( __CLASS__, 'llms_rewrite' ) );
 		add_action( 'template_redirect', array( __CLASS__, 'llms_serve' ) );
 	}
@@ -82,6 +89,96 @@ class ScanGEO_Frontend {
 		return $custom ? $custom : $title;
 	}
 
+	/** Completa el grafo JSON-LD ya emitido por Rank Math sin duplicarlo. */
+	public static function rank_math_json_ld( $data, $jsonld ) {
+		if ( ! class_exists( 'RankMath' ) || ! is_array( $data ) ) {
+			return $data;
+		}
+
+		$profiles = self::social_profiles();
+		$logo_id  = get_theme_mod( 'custom_logo' );
+		$logo     = $logo_id ? wp_get_attachment_image_url( $logo_id, 'full' ) : '';
+		$org_done = false;
+		$article_done = false;
+
+		foreach ( $data as $key => $entity ) {
+			if ( ! is_array( $entity ) ) {
+				continue;
+			}
+			$types = isset( $entity['@type'] ) ? (array) $entity['@type'] : array();
+			if ( self::flag( 'schema_org' ) && in_array( 'Organization', $types, true ) ) {
+				$data[ $key ]['name'] = ! empty( $entity['name'] ) ? $entity['name'] : get_bloginfo( 'name' );
+				$data[ $key ]['url']  = ! empty( $entity['url'] ) ? $entity['url'] : home_url( '/' );
+				if ( $logo && empty( $entity['logo'] ) ) {
+					$data[ $key ]['logo'] = $logo;
+				}
+				if ( $profiles ) {
+					$data[ $key ]['sameAs'] = array_values( array_unique( array_merge( isset( $entity['sameAs'] ) ? (array) $entity['sameAs'] : array(), $profiles ) ) );
+				}
+				$org_done = true;
+			}
+			if ( self::flag( 'schema_article' ) && ( in_array( 'Article', $types, true ) || in_array( 'BlogPosting', $types, true ) ) && is_singular() ) {
+				$post_id = get_queried_object_id();
+				$post    = $post_id ? get_post( $post_id ) : null;
+				if ( $post ) {
+					$data[ $key ]['dateModified'] = get_the_modified_date( 'c', $post_id );
+					if ( empty( $entity['author'] ) ) {
+						$data[ $key ]['author'] = array(
+							'@type' => 'Person',
+							'name'  => get_the_author_meta( 'display_name', $post->post_author ),
+							'url'   => get_author_posts_url( $post->post_author ),
+						);
+					}
+					$article_done = true;
+				}
+			}
+		}
+
+		if ( self::flag( 'schema_org' ) && ! $org_done && ( is_front_page() || is_home() ) ) {
+			$entity = array(
+				'@type' => 'Organization',
+				'@id'   => home_url( '/#organization' ),
+				'name'  => get_bloginfo( 'name' ),
+				'url'   => home_url( '/' ),
+			);
+			if ( $logo ) {
+				$entity['logo'] = $logo;
+			}
+			if ( $profiles ) {
+				$entity['sameAs'] = $profiles;
+			}
+			$data['scangeoOrganization'] = $entity;
+		}
+
+		return $data;
+	}
+
+	/** Aporta una descripción para OG si Rank Math no pudo resolver una. */
+	public static function rank_math_og_description( $content ) {
+		if ( ! self::flag( 'og' ) || ! empty( $content ) || ! is_singular() ) {
+			return $content;
+		}
+		$post_id = get_queried_object_id();
+		$desc    = $post_id ? get_post_meta( $post_id, 'rank_math_description', true ) : '';
+		if ( ! $desc && $post_id ) {
+			$desc = get_the_excerpt( $post_id );
+		}
+		return $desc ? wp_strip_all_tags( $desc ) : get_bloginfo( 'description' );
+	}
+
+	/** Aporta una imagen OG por defecto si Rank Math no tiene una configurada. */
+	public static function rank_math_og_image( $image ) {
+		if ( ! self::flag( 'og' ) || ! empty( $image ) ) {
+			return $image;
+		}
+		$post_id = is_singular() ? get_queried_object_id() : 0;
+		if ( $post_id && has_post_thumbnail( $post_id ) ) {
+			return get_the_post_thumbnail_url( $post_id, 'large' );
+		}
+		$logo_id = get_theme_mod( 'custom_logo' );
+		return $logo_id ? wp_get_attachment_image_url( $logo_id, 'large' ) : $image;
+	}
+
 	public static function ensure_lang( $output ) {
 		if ( self::flag( 'lang' ) && false === stripos( $output, 'lang=' ) ) {
 			$output .= ' lang="' . esc_attr( str_replace( '_', '-', get_locale() ) ) . '"';
@@ -138,7 +235,7 @@ class ScanGEO_Frontend {
 
 	private static function schema_org_output() {
 		$opts     = get_option( 'scangeo_settings', array() );
-		$profiles = ! empty( $opts['social_profiles'] ) ? array_values( array_filter( array_map( 'trim', explode( "\n", $opts['social_profiles'] ) ) ) ) : array();
+		$profiles = self::social_profiles();
 		$logo_id  = get_theme_mod( 'custom_logo' );
 		$logo     = $logo_id ? wp_get_attachment_image_url( $logo_id, 'full' ) : '';
 
@@ -170,6 +267,12 @@ class ScanGEO_Frontend {
 			'@context' => 'https://schema.org',
 			'@graph'   => array( $org, $website ),
 		) );
+	}
+
+	private static function social_profiles() {
+		$opts = get_option( 'scangeo_settings', array() );
+		$raw  = ! empty( $opts['social_profiles'] ) ? explode( "\n", $opts['social_profiles'] ) : array();
+		return array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $raw ) ) ) );
 	}
 
 	private static function schema_article_output( $post_id ) {

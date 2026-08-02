@@ -796,6 +796,11 @@ class ScanGEO_Fixers {
 
 	private static function fix_open_graph( $issue ) {
 		$seo = self::seo_plugin();
+		if ( 'rankmath' === $seo ) {
+			$prev = self::flag_value( 'og' );
+			self::set_flag( 'og' );
+			return array( 'status' => 'fixed', 'message' => 'Integracion con Rank Math activada: scanGEO completa og:description y og:image cuando Rank Math no encuentra una.', 'undo' => array( 'type' => 'flag', 'items' => array( 'og' => $prev ) ) );
+		}
 		if ( 'yoast' === $seo || 'rankmath' === $seo ) {
 			return array( 'status' => 'manual', 'message' => ucfirst( $seo ) . ' ya genera Open Graph, pero el informe lo marca como incompleto: revisa que la opción de OG esté activada y que las páginas tengan imagen destacada.' );
 		}
@@ -810,6 +815,11 @@ class ScanGEO_Fixers {
 
 	private static function fix_schema_org( $issue ) {
 		$seo = self::seo_plugin();
+		if ( 'rankmath' === $seo ) {
+			$prev = self::flag_value( 'schema_org' );
+			self::set_flag( 'schema_org' );
+			return array( 'status' => 'fixed', 'message' => 'Integracion con Rank Math activada: scanGEO completa el Organization de su @graph con nombre, URL, logo y perfiles sameAs, sin duplicar schema.', 'undo' => array( 'type' => 'flag', 'items' => array( 'schema_org' => $prev ) ) );
+		}
 		if ( 'yoast' === $seo || 'rankmath' === $seo ) {
 			return array( 'status' => 'manual', 'message' => ucfirst( $seo ) . ' ya emite schema en @graph. Si scanGEO lo marcó como ausente, probablemente el escáner no parsea @graph (bug conocido) o falta configurar la organización en el plugin SEO: revisa Apariencia en buscadores → Organización.' );
 		}
@@ -826,6 +836,11 @@ class ScanGEO_Fixers {
 
 	private static function fix_schema_article( $issue ) {
 		$seo = self::seo_plugin();
+		if ( 'rankmath' === $seo ) {
+			$prev = self::flag_value( 'schema_article' );
+			self::set_flag( 'schema_article' );
+			return array( 'status' => 'fixed', 'message' => 'Integracion con Rank Math activada: scanGEO completa dateModified y, cuando falta, el autor Person en su schema Article.', 'undo' => array( 'type' => 'flag', 'items' => array( 'schema_article' => $prev ) ) );
+		}
 		if ( 'yoast' === $seo || 'rankmath' === $seo ) {
 			return array( 'status' => 'manual', 'message' => ucfirst( $seo ) . ' ya emite schema Article con autor y fechas en las entradas. Verifica que los posts tengan autor con nombre público completo y perfil con biografía.' );
 		}
@@ -861,7 +876,7 @@ class ScanGEO_Fixers {
 	}
 
 	private static function fix_sitemap( $issue ) {
-		if ( 'yoast' === self::seo_plugin() ) {
+		if ( in_array( self::seo_plugin(), array( 'yoast', 'rankmath' ), true ) ) {
 			$prev = self::flag_value( 'robots_ai' );
 			self::set_flag( 'robots_ai' );
 			return array(
@@ -896,6 +911,11 @@ class ScanGEO_Fixers {
 		$profiles = ! empty( $opts['social_profiles'] ) ? array_filter( array_map( 'trim', explode( "\n", $opts['social_profiles'] ) ) ) : array();
 		if ( empty( $profiles ) ) {
 			return array( 'status' => 'failed', 'message' => 'Añade las URLs de tus perfiles sociales en scanGEO Fixer → Ajustes y vuelve a pulsar Reparar: se incluirán como sameAs en el schema Organization y podrás enlazarlas en el footer.' );
+		}
+		if ( 'rankmath' === self::seo_plugin() ) {
+			$prev = self::flag_value( 'schema_org' );
+			self::set_flag( 'schema_org' );
+			return array( 'status' => 'fixed', 'message' => count( $profiles ) . ' perfiles sociales se integraran como sameAs en el Organization de Rank Math.', 'undo' => array( 'type' => 'flag', 'items' => array( 'schema_org' => $prev ) ) );
 		}
 		if ( self::seo_plugin() ) {
 			return array( 'status' => 'manual', 'message' => 'Configura tus perfiles sociales en tu plugin SEO (sección Organización/Social) para que se emitan como sameAs. Perfiles detectados en Ajustes: ' . count( $profiles ) . '.' );
