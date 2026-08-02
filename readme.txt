@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.2.4
+Stable tag: 2.2.5
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,9 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.2.5 =
+* Corrección crítica: la v2.2.4 llamaba a métodos internos (current_plugin_file(), supported_plugin_files()) que, por un fallo mío al editar el código, no llegaron a incluirse en el archivo publicado — provocaba un error fatal ("Call to undefined method") que WordPress solo evitaba desactivando el plugin automáticamente. Restaurados los tres métodos que resuelven la carpeta real de instalación (scangeo-fix, scangeo-fixer o scangeo-fix-X.Y.Z), y actualizados row_meta(), after_update(), installed_version() y fix_folder_name() para usarlos también, de forma consistente en todo el archivo.
 
 = 2.2.4 =
 * Corrección definitiva del aviso de actualización que no llegaba a Escritorio > Actualizaciones: check_update() calculaba la carpeta del plugin instalado comprobando solo scangeo-fix/ o scangeo-fixer/ (las rutas "canónicas"), nunca la carpeta real cuando esta incluye el número de versión en el nombre (scangeo-fix-2.2.0, herencia de instalaciones manuales anteriores). WordPress descarta en silencio cualquier aviso de actualización cuya carpeta no coincida exactamente con un plugin instalado de verdad, así que nunca aparecía en la lista aunque el propio panel de scanGEO Fixer sí detectara bien la versión nueva. Ahora usa el mismo resolutor de carpeta ya usado en el resto del plugin.

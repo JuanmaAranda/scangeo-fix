@@ -36,6 +36,45 @@ class ScanGEO_Updater {
 
 	private static $initialized = false;
 
+	/**
+	 * WordPress conserva la ruta del plugin como identificador. Algunas
+	 * instalaciones anteriores de scanGEO Fixer quedaron en carpetas como
+	 * scangeo-fix-2.1.9, por lo que también debemos reconocerlas y migrarlas.
+	 */
+	private static function is_supported_plugin_file( $file ) {
+		if ( ! is_string( $file ) || 'scangeo-fixer.php' !== basename( $file ) ) {
+			return false;
+		}
+		$folder = dirname( str_replace( '\\', '/', $file ) );
+		return self::SLUG === $folder || self::LEGACY_PLUGIN_FILE === $folder . '/scangeo-fixer.php' || 0 === strpos( $folder, self::SLUG . '-' );
+	}
+
+	private static function supported_plugin_files() {
+		$files = array( self::PLUGIN_FILE, self::LEGACY_PLUGIN_FILE );
+		if ( defined( 'SCANGEO_FIXER_DIR' ) && function_exists( 'plugin_basename' ) ) {
+			$files[] = plugin_basename( trailingslashit( SCANGEO_FIXER_DIR ) . 'scangeo-fixer.php' );
+		}
+		if ( defined( 'WP_PLUGIN_DIR' ) ) {
+			$matches = glob( trailingslashit( WP_PLUGIN_DIR ) . self::SLUG . '-*/scangeo-fixer.php' );
+			if ( is_array( $matches ) ) {
+				foreach ( $matches as $match ) {
+					$files[] = function_exists( 'plugin_basename' ) ? plugin_basename( $match ) : str_replace( trailingslashit( WP_PLUGIN_DIR ), '', $match );
+				}
+			}
+		}
+		return array_values( array_unique( array_filter( $files, array( __CLASS__, 'is_supported_plugin_file' ) ) ) );
+	}
+
+	public static function current_plugin_file() {
+		$files = self::supported_plugin_files();
+		foreach ( $files as $file ) {
+			if ( defined( 'WP_PLUGIN_DIR' ) && file_exists( trailingslashit( WP_PLUGIN_DIR ) . $file ) ) {
+				return $file;
+			}
+		}
+		return self::PLUGIN_FILE;
+	}
+
 	/** Igual que en ScanGEO_AI: fuerza este timeout por encima de lo que el hosting imponga vía 'http_request_timeout'. */
 	const REQUEST_TIMEOUT = 20;
 
@@ -128,7 +167,7 @@ class ScanGEO_Updater {
 	 * más arriba — no depende de estar en el repositorio oficial.
 	 */
 	public static function row_meta( $links, $file ) {
-		if ( self::PLUGIN_FILE !== $file && self::LEGACY_PLUGIN_FILE !== $file ) {
+		if ( ! self::is_supported_plugin_file( $file ) ) {
 			return $links;
 		}
 		// Evita añadir un segundo enlace idéntico si, por lo que sea
@@ -168,7 +207,14 @@ class ScanGEO_Updater {
 		} elseif ( ! empty( $hook_extra['plugin'] ) ) {
 			$plugins = array( $hook_extra['plugin'] );
 		}
-		if ( ! in_array( self::PLUGIN_FILE, $plugins, true ) && ! in_array( self::LEGACY_PLUGIN_FILE, $plugins, true ) ) {
+		$managed_plugin = false;
+		foreach ( $plugins as $plugin ) {
+			if ( self::is_supported_plugin_file( $plugin ) ) {
+				$managed_plugin = true;
+				break;
+			}
+		}
+		if ( ! $managed_plugin ) {
 			return;
 		}
 		delete_transient( self::CACHE_KEY );
@@ -189,7 +235,7 @@ class ScanGEO_Updater {
 		if ( ! function_exists( 'get_plugin_data' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
-		foreach ( array( self::PLUGIN_FILE, self::LEGACY_PLUGIN_FILE ) as $plugin_file ) {
+		foreach ( self::supported_plugin_files() as $plugin_file ) {
 			$path = WP_PLUGIN_DIR . '/' . $plugin_file;
 			if ( file_exists( $path ) ) {
 				$data = get_plugin_data( $path, false, false );
@@ -465,7 +511,7 @@ class ScanGEO_Updater {
 	 */
 	public static function fix_folder_name( $source, $remote_source, $upgrader, $hook_extra ) {
 		global $wp_filesystem;
-		if ( empty( $hook_extra['plugin'] ) || ( self::PLUGIN_FILE !== $hook_extra['plugin'] && self::LEGACY_PLUGIN_FILE !== $hook_extra['plugin'] ) ) {
+		if ( empty( $hook_extra['plugin'] ) || ! self::is_supported_plugin_file( $hook_extra['plugin'] ) ) {
 			return $source;
 		}
 		$desired = trailingslashit( $remote_source ) . self::SLUG . '/';
