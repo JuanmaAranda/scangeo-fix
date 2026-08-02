@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.8
+Stable tag: 2.1.9
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -55,16 +55,19 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 
 == Changelog ==
 
+= 2.1.9 =
+* Corregida la codificación de todos los textos del panel y de las propuestas: tildes, eñes y signos vuelven a mostrarse correctamente.
+
 = 2.1.8 =
 * Corregido el enlace de actualización: registra primero la versión en el listado nativo de WordPress y después abre Escritorio > Actualizaciones.
 * El paquete incluye siempre la carpeta raíz `scangeo-fixer/`, necesaria para que WordPress lo reconozca como una actualización.
 
 = 2.1.6 =
-* CorrecciÃ³n crÃ­tica del actualizador: el ZIP vuelve a incluir una Ãºnica carpeta raÃ­z `scangeo-fixer/`. WordPress ya instala la actualizaciÃ³n en la ruta esperada y no desactiva el plugin por archivo inexistente.
+* Corrección crítica del actualizador: el ZIP vuelve a incluir una única carpeta raíz `scangeo-fixer/`. WordPress ya instala la actualización en la ruta esperada y no desactiva el plugin por archivo inexistente.
 
 = 2.1.5 =
-* Las propuestas de FAQ, respuesta directa y ampliaciÃ³n de contenido se solicitan desde el navegador del administrador a scanGEO.app. Ya no dependen de que el servidor WordPress pueda abrir una conexiÃ³n saliente.
-* Las propuestas se muestran como borrador editable y solo se guardan tras confirmarlas con Â«Aplicar estaÂ». Â«Reparar todoÂ» no solicita propuestas editoriales automÃ¡ticamente.
+* Las propuestas de FAQ, respuesta directa y ampliación de contenido se solicitan desde el navegador del administrador a scanGEO.app. Ya no dependen de que el servidor WordPress pueda abrir una conexión saliente.
+* Las propuestas se muestran como borrador editable y solo se guardan tras confirmarlas con «Aplicar esta». «Reparar todo» no solicita propuestas editoriales automáticamente.
 
 = 2.1.2 =
 * Corrección crítica: al cargar un informe, el callback que ajustaba el tiempo de espera de las conexiones de IA no era invocable por WordPress y podía provocar un error fatal. Ahora es público y fuerza correctamente 45 segundos.

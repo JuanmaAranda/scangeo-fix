@@ -386,8 +386,8 @@ class ScanGEO_Admin {
 
 	/**
 	 * Guarda una propuesta que el navegador ha solicitado directamente a
-	 * scanGEO.app. PHP no llama al proveedor de IA: asÃ­ los hostings que
-	 * limitan conexiones salientes no bloquean la generaciÃ³n.
+	 * scanGEO.app. PHP no llama al proveedor de IA: así los hostings que
+	 * limitan conexiones salientes no bloquean la generación.
 	 */
 	public static function ajax_store_browser_proposal() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -413,13 +413,13 @@ class ScanGEO_Admin {
 			wp_send_json_error( array( 'message' => 'La URL de la propuesta no es aplicable.' ), 400 );
 		}
 		if ( '' === trim( wp_strip_all_tags( $html ) ) || strlen( $html ) > 12000 ) {
-			wp_send_json_error( array( 'message' => 'El contenido de la propuesta no es vÃ¡lido.' ), 400 );
+			wp_send_json_error( array( 'message' => 'El contenido de la propuesta no es válido.' ), 400 );
 		}
 
 		$results = get_option( 'scangeo_results', array() );
 		$entry = array(
 			'status'   => 'suggested',
-			'message'  => 'Propuesta generada por scanGEO. RevÃ­sala y confÃ­rmala antes de insertarla.',
+			'message'  => 'Propuesta generada por scanGEO. Revísala y confírmala antes de insertarla.',
 			'proposal' => array( $url => $html ),
 			'time'     => current_time( 'mysql' ),
 		);

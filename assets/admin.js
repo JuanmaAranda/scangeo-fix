@@ -126,13 +126,13 @@
 
 	function browserProposalError( response, body ) {
 		var messages = {
-			invalid_url: 'La URL de la pÃ¡gina no es vÃ¡lida para generar una propuesta.',
-			page_unavailable: 'scanGEO no pudo recuperar esta pÃ¡gina como HTML pÃºblico.',
-			rate_limited: 'Se ha alcanzado el lÃ­mite temporal de solicitudes. IntÃ©ntalo mÃ¡s tarde.',
-			service_busy: 'El servicio de propuestas estÃ¡ temporalmente ocupado. IntÃ©ntalo mÃ¡s tarde.',
+			invalid_url: 'La URL de la página no es válida para generar una propuesta.',
+			page_unavailable: 'scanGEO no pudo recuperar esta página como HTML público.',
+			rate_limited: 'Se ha alcanzado el límite temporal de solicitudes. Inténtalo más tarde.',
+			service_busy: 'El servicio de propuestas está temporalmente ocupado. Inténtalo más tarde.',
 			quota_exceeded: 'Se ha agotado la cuota gratuita de propuestas de este dominio.',
-			ai_error: 'No se pudo generar la propuesta ahora mismo. No se ha modificado la pÃ¡gina.',
-			server_error: 'scanGEO ha devuelto un error temporal. No se ha modificado la pÃ¡gina.'
+			ai_error: 'No se pudo generar la propuesta ahora mismo. No se ha modificado la página.',
+			server_error: 'scanGEO ha devuelto un error temporal. No se ha modificado la página.'
 		};
 		if ( body && body.error && messages[ body.error ] ) {
 			return messages[ body.error ];
@@ -146,7 +146,7 @@
 			setRowState( $row, 'failed', 'El informe no incluye una URL editable para esta propuesta.' );
 			return $.Deferred().reject().promise();
 		}
-		setRowState( $row, 'fixing', 'Solicitando propuesta a scanGEOâ€¦' );
+		setRowState( $row, 'fixing', 'Solicitando propuesta a scanGEO…' );
 		return window.fetch( scangeoFixer.browserProposalEndpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -165,7 +165,7 @@
 		} ).then( function ( result ) {
 			var html = proposalHtml( result.proposal || {} );
 			if ( ! html || ! $.trim( $( '<div></div>' ).html( html ).text() ) ) {
-				throw new Error( 'scanGEO ha devuelto una propuesta vacÃ­a.' );
+				throw new Error( 'scanGEO ha devuelto una propuesta vacía.' );
 			}
 			return $.post( scangeoFixer.ajaxUrl, {
 				action: 'scangeo_store_browser_proposal',
