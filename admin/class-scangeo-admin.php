@@ -184,21 +184,27 @@ class ScanGEO_Admin {
 		if ( ! current_user_can( 'manage_options' ) || ! wp_verify_nonce( sanitize_key( $_POST['scangeo_upload_nonce'] ), 'scangeo_upload' ) ) {
 			wp_die( 'Permisos insuficientes.' );
 		}
-		if ( empty( $_FILES['scangeo_report']['tmp_name'] ) ) {
+		if ( empty( $_FILES['scangeo_report'] ) || ! is_array( $_FILES['scangeo_report'] ) ) {
 			self::redirect_with_notice( 'no_file' );
 		}
 
 		$file = $_FILES['scangeo_report'];
+		if ( ! isset( $file['error'] ) || UPLOAD_ERR_OK !== (int) $file['error'] || empty( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
+			self::redirect_with_notice( 'upload_error' );
+		}
 		$name = isset( $file['name'] ) ? sanitize_file_name( $file['name'] ) : '';
 		$ext  = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
 		if ( ! in_array( $ext, array( 'md', 'markdown', 'txt' ), true ) ) {
 			self::redirect_with_notice( 'bad_type' );
 		}
-		if ( $file['size'] > 5 * MB_IN_BYTES ) {
+		if ( ! isset( $file['size'] ) || $file['size'] > 5 * MB_IN_BYTES ) {
 			self::redirect_with_notice( 'too_big' );
 		}
 
 		$content = file_get_contents( $file['tmp_name'] ); // phpcs:ignore
+		if ( false === $content ) {
+			self::redirect_with_notice( 'read_error' );
+		}
 		$report  = ScanGEO_Parser::parse( (string) $content );
 		if ( is_wp_error( $report ) ) {
 			set_transient( 'scangeo_error_detail', $report->get_error_message(), 60 );
@@ -227,21 +233,32 @@ class ScanGEO_Admin {
 		// Resumen en palabras sencillas con semáforo de colores, solo si hay
 		// IA configurada. Si no la hay, se deja en null y el panel muestra
 		// el aviso para configurarla.
-		$summary = self::generate_ai_summary( $report );
-		update_option( 'scangeo_summary', $summary, false );
+		$summary_result = array( 'summary' => null, 'warning' => '' );
+		try {
+			$summary_result = self::generate_ai_summary( $report );
+		} catch ( Throwable $error ) {
+			// El resumen es opcional: un error de proveedor o de un callback externo
+			// nunca debe impedir que el informe, ya guardado, se pueda consultar.
+			$summary_result['warning'] = 'No se ha podido generar el resumen de IA en este momento.';
+		}
+		update_option( 'scangeo_summary', $summary_result['summary'], false );
 
+		if ( ! empty( $summary_result['warning'] ) ) {
+			set_transient( 'scangeo_summary_warning', $summary_result['warning'], 60 );
+			self::redirect_with_notice( 'summary_warning' );
+		}
 		self::redirect_with_notice( 'ok' );
 	}
 
 	/**
 	 * Genera, a partir del informe recién subido, un resumen en lenguaje
 	 * sencillo con semáforo (rojo/ámbar/verde) usando la IA configurada.
-	 * Devuelve null si no hay IA configurada o si la generación falla —
-	 * en ambos casos el resto del plugin sigue funcionando con normalidad.
+	 * Devuelve el resumen y, si falla una generación opcional, un aviso para
+	 * que la subida continúe sin perder el informe recién guardado.
 	 */
 	private static function generate_ai_summary( $report ) {
 		if ( ! ScanGEO_AI::is_configured() ) {
-			return null;
+			return array( 'summary' => null, 'warning' => '' );
 		}
 		$counts = array( 'critical' => 0, 'high' => 0, 'medium' => 0, 'low' => 0 );
 		$labels = array();
@@ -271,14 +288,14 @@ class ScanGEO_Admin {
 
 		$ai = ScanGEO_AI::generate( $prompt, 700 );
 		if ( is_wp_error( $ai ) ) {
-			return null;
+			return array( 'summary' => null, 'warning' => 'No se ha podido generar el resumen de IA en este momento.' );
 		}
 		$clean = trim( (string) $ai );
 		$clean = preg_replace( '/^```(json)?/i', '', $clean );
 		$clean = preg_replace( '/```$/', '', $clean );
 		$data  = json_decode( trim( (string) $clean ), true );
 		if ( ! is_array( $data ) || empty( $data['items'] ) || ! is_array( $data['items'] ) ) {
-			return null;
+			return array( 'summary' => null, 'warning' => 'La IA devolvió un resumen no válido; el informe se ha cargado correctamente.' );
 		}
 		$items = array();
 		foreach ( $data['items'] as $item ) {
@@ -290,12 +307,15 @@ class ScanGEO_Admin {
 			$items[] = array( 'color' => $color, 'text' => sanitize_text_field( $item['text'] ) );
 		}
 		if ( empty( $items ) ) {
-			return null;
+			return array( 'summary' => null, 'warning' => 'La IA devolvió un resumen vacío; el informe se ha cargado correctamente.' );
 		}
 		return array(
-			'headline' => isset( $data['headline'] ) ? sanitize_text_field( $data['headline'] ) : '',
-			'items'    => array_slice( $items, 0, 8 ),
-			'time'     => current_time( 'mysql' ),
+			'summary' => array(
+				'headline' => isset( $data['headline'] ) ? sanitize_text_field( $data['headline'] ) : '',
+				'items'    => array_slice( $items, 0, 8 ),
+				'time'     => current_time( 'mysql' ),
+			),
+			'warning' => '',
 		);
 	}
 
@@ -737,9 +757,12 @@ class ScanGEO_Admin {
 		$messages = array(
 			'ok'          => array( 'success', 'Informe cargado correctamente.' ),
 			'no_file'     => array( 'error', 'No se seleccionó ningún archivo.' ),
+			'upload_error' => array( 'error', 'No se pudo recibir el archivo. Inténtalo de nuevo o comprueba el límite de subida del servidor.' ),
 			'bad_type'    => array( 'error', 'El archivo debe ser .md (o .txt).' ),
 			'too_big'     => array( 'error', 'El archivo supera los 5 MB.' ),
+			'read_error'  => array( 'error', 'No se pudo leer el archivo subido. Inténtalo de nuevo.' ),
 			'parse_error' => array( 'error', 'No se pudo interpretar el informe. ' . esc_html( (string) get_transient( 'scangeo_error_detail' ) ) ),
+			'summary_warning' => array( 'warning', 'Informe cargado correctamente. ' . esc_html( (string) get_transient( 'scangeo_summary_warning' ) ) ),
 		);
 		if ( isset( $messages[ $code ] ) ) {
 			printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $messages[ $code ][0] ), wp_kses_post( $messages[ $code ][1] ) );

@@ -39,8 +39,8 @@ class ScanGEO_AI {
 	const REQUEST_TIMEOUT = 45;
 
 	/** Fuerza REQUEST_TIMEOUT por encima de cualquier filtro que el hosting u otro plugin aplique a 'http_request_timeout'. */
-	private static function force_timeout( $seconds ) {
-		return $seconds;
+	public static function force_timeout( $seconds ) {
+		return self::REQUEST_TIMEOUT;
 	}
 
 	/**
@@ -50,11 +50,13 @@ class ScanGEO_AI {
 	 */
 	private static function remote_request( $method, $url, $args ) {
 		add_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
-		$response = ( 'get' === $method )
-			? wp_remote_get( $url, $args )
-			: wp_remote_post( $url, $args );
-		remove_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
-		return $response;
+		try {
+			return ( 'get' === $method )
+				? wp_remote_get( $url, $args )
+				: wp_remote_post( $url, $args );
+		} finally {
+			remove_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
+		}
 	}
 
 	public static function is_configured() {

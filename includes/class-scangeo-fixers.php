@@ -88,7 +88,11 @@ class ScanGEO_Fixers {
 		$n = 0;
 		if ( 'meta' === $undo_data['type'] ) {
 			foreach ( $undo_data['items'] as $post_id => $item ) {
-				update_post_meta( (int) $post_id, $item['meta'], $item['value'] );
+				if ( array_key_exists( 'exists', $item ) && ! $item['exists'] ) {
+					delete_post_meta( (int) $post_id, $item['meta'] );
+				} else {
+					update_post_meta( (int) $post_id, $item['meta'], $item['value'] );
+				}
 				$n++;
 			}
 		} elseif ( 'content' === $undo_data['type'] ) {
@@ -101,6 +105,19 @@ class ScanGEO_Fixers {
 				self::set_flag( $flag, $prev );
 			}
 			$n = count( $undo_data['items'] );
+		} elseif ( 'image_alt' === $undo_data['type'] ) {
+			foreach ( $undo_data['items']['content'] as $post_id => $item ) {
+				wp_update_post( array( 'ID' => (int) $post_id, 'post_content' => $item['content'] ) );
+				$n++;
+			}
+			foreach ( $undo_data['items']['meta'] as $attachment_id => $item ) {
+				if ( ! empty( $item['exists'] ) ) {
+					update_post_meta( (int) $attachment_id, $item['meta'], $item['value'] );
+				} else {
+					delete_post_meta( (int) $attachment_id, $item['meta'] );
+				}
+				$n++;
+			}
 		}
 		return array( 'status' => 'pending', 'message' => 'Deshecho: ' . $n . ' cambio(s) revertido(s) a su valor anterior.' );
 	}
@@ -390,7 +407,7 @@ class ScanGEO_Fixers {
 				$ko[] = $url;
 				continue;
 			}
-			$undo[ $post_id ] = array( 'meta' => $keys['desc'], 'value' => get_post_meta( $post_id, $keys['desc'], true ) );
+			$undo[ $post_id ] = array( 'meta' => $keys['desc'], 'value' => get_post_meta( $post_id, $keys['desc'], true ), 'exists' => metadata_exists( 'post', $post_id, $keys['desc'] ) );
 			update_post_meta( $post_id, $keys['desc'], $text );
 			$ok++;
 		}
@@ -470,7 +487,7 @@ class ScanGEO_Fixers {
 			if ( ! $post_id ) {
 				continue;
 			}
-			$undo[ $post_id ] = array( 'meta' => $keys['title'], 'value' => get_post_meta( $post_id, $keys['title'], true ) );
+			$undo[ $post_id ] = array( 'meta' => $keys['title'], 'value' => get_post_meta( $post_id, $keys['title'], true ), 'exists' => metadata_exists( 'post', $post_id, $keys['title'] ) );
 			update_post_meta( $post_id, $keys['title'], $text );
 			$ok++;
 		}
@@ -646,7 +663,7 @@ class ScanGEO_Fixers {
 		}
 		$ok   = 0;
 		$ko   = array();
-		$undo = array();
+		$undo = array( 'content' => array(), 'meta' => array() );
 
 		foreach ( $issue['pages'] as $url ) {
 			if ( self::is_translated_url( $url ) ) {
@@ -680,6 +697,13 @@ class ScanGEO_Fixers {
 					$content = str_replace( $tag, $new_tag, $content );
 					$att_id  = attachment_url_to_postid( $src );
 					if ( $att_id ) {
+						if ( ! isset( $undo['meta'][ $att_id ] ) ) {
+							$undo['meta'][ $att_id ] = array(
+								'meta'   => '_wp_attachment_image_alt',
+								'value'  => get_post_meta( $att_id, '_wp_attachment_image_alt', true ),
+								'exists' => metadata_exists( 'post', $att_id, '_wp_attachment_image_alt' ),
+							);
+						}
 						update_post_meta( $att_id, '_wp_attachment_image_alt', $alt );
 					}
 					$changed = true;
@@ -687,14 +711,14 @@ class ScanGEO_Fixers {
 				}
 			}
 			if ( $changed ) {
-				$undo[ $post_id ] = array( 'content' => $original );
+				$undo['content'][ $post_id ] = array( 'content' => $original );
 				wp_update_post( array( 'ID' => $post_id, 'post_content' => $content ) );
 			}
 		}
 		if ( 0 === $ok && empty( $ko ) ) {
 			return array( 'status' => 'failed', 'message' => 'No se encontraron imágenes sin alt en el contenido de esos posts (pueden estar en la plantilla del tema, no en el editor).' );
 		}
-		return self::batch_result( $ok, $ko, 'atributos alt añadidos', 'Guardados en el contenido y en la biblioteca de medios.', $undo );
+		return self::batch_result( $ok, $ko, 'atributos alt añadidos', 'Guardados en el contenido y en la biblioteca de medios.', $undo, 'image_alt' );
 	}
 
 	private static function alt_for_image( $src, $post_title, $url = '' ) {
@@ -719,7 +743,7 @@ class ScanGEO_Fixers {
 		return ucfirst( $alt );
 	}
 
-	private static function batch_result( $ok, $ko, $verb, $note = '', $undo = array() ) {
+	private static function batch_result( $ok, $ko, $verb, $note = '', $undo = array(), $undo_type = 'content' ) {
 		if ( $ok > 0 && empty( $ko ) ) {
 			$result = array( 'status' => 'fixed', 'message' => $ok . ' ' . $verb . '. ' . $note );
 		} elseif ( $ok > 0 ) {
@@ -728,7 +752,7 @@ class ScanGEO_Fixers {
 			return array( 'status' => 'failed', 'message' => 'No se pudo arreglar ninguna: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) );
 		}
 		if ( ! empty( $undo ) ) {
-			$result['undo'] = array( 'type' => 'content', 'items' => $undo );
+			$result['undo'] = array( 'type' => $undo_type, 'items' => $undo );
 		}
 		return $result;
 	}

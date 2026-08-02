@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,12 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.1.2 =
+* Corrección crítica: al cargar un informe, el callback que ajustaba el tiempo de espera de las conexiones de IA no era invocable por WordPress y podía provocar un error fatal. Ahora es público y fuerza correctamente 45 segundos.
+* Corrección: aunque la generación opcional del resumen de IA falle, el informe ya cargado se conserva y el panel muestra un aviso recuperable en vez de interrumpir el sitio.
+* Corrección: «Deshacer» restaura también los atributos alt modificados en la biblioteca de medios y elimina los metadatos que no existían antes de aplicar una propuesta.
+* Corrección de distribución: el ZIP usa rutas estándar con `/`, compatibles con servidores Linux al instalar el plugin.
 
 = 2.1.1 =
 * Corrección importante: las llamadas al proveedor de IA (incluida, Anthropic u OpenAI) ahora fuerzan su propio tiempo de espera (45 s) por encima del que el hosting pudiera estar imponiendo mediante el filtro interno de WordPress `http_request_timeout`. Muchos hostings compartidos limitan ahí, de forma fija, todas las peticiones salientes de cualquier plugin a unos 10 segundos, sin importar lo que el plugin pida — esto es lo que producía sistemáticamente el error "cURL error 28: Connection timed out after 10002 milliseconds" en el botón Reparar, incluso después del reintento automático.
