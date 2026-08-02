@@ -782,12 +782,15 @@ class ScanGEO_Admin {
 		self::notices();
 		echo '<nav class="nav-tab-wrapper">';
 		echo '<a href="' . esc_url( admin_url( 'admin.php?page=scangeo-fixer' ) ) . '" class="nav-tab ' . ( 'report' === $tab ? 'nav-tab-active' : '' ) . '">Informe</a>';
+		echo '<a href="' . esc_url( admin_url( 'admin.php?page=scangeo-fixer&tab=history' ) ) . '" class="nav-tab ' . ( 'history' === $tab ? 'nav-tab-active' : '' ) . '">Hist&#243;rico</a>';
 		echo '<a href="' . esc_url( admin_url( 'admin.php?page=scangeo-fixer&tab=settings' ) ) . '" class="nav-tab ' . ( 'settings' === $tab ? 'nav-tab-active' : '' ) . '">Ajustes</a>';
 		echo '<a href="' . esc_url( admin_url( 'admin.php?page=scangeo-fixer&tab=help' ) ) . '" class="nav-tab ' . ( 'help' === $tab ? 'nav-tab-active' : '' ) . '">Ayuda</a>';
 		echo '</nav>';
 
 		if ( 'settings' === $tab ) {
 			self::render_settings();
+		} elseif ( 'history' === $tab ) {
+			self::render_history();
 		} elseif ( 'help' === $tab ) {
 			self::render_help();
 		} else {
@@ -1071,7 +1074,6 @@ class ScanGEO_Admin {
 		<?php
 		self::render_summary( $report );
 		self::render_scores( isset( $report['scores'] ) ? $report['scores'] : array() );
-		self::render_history();
 
 		if ( empty( $issue_list ) ) {
 			echo '<p>Aún no hay ningún informe cargado, o el último informe no contenía fallos. Sube el archivo .md exportado desde <strong>scanGEO.app</strong>.</p>';
@@ -1168,6 +1170,7 @@ class ScanGEO_Admin {
 					<?php if ( $explainer ) : ?><p class="scangeo-issue-explainer"><?php echo esc_html( $explainer ); ?></p><?php endif; ?>
 					<?php if ( $issue['detail'] ) : ?><p class="description"><?php echo self::safe_text( $issue['detail'] ); ?></p><?php endif; ?>
 
+					<?php $browser_proposal_type = isset( $issue['id'] ) && in_array( $issue['id'], array( 'geo.faq_or_qa', 'geo.direct_answer', 'content.body_length' ), true ) ? ( 'geo.faq_or_qa' === $issue['id'] ? 'faq' : ( 'geo.direct_answer' === $issue['id'] ? 'direct_answer' : 'content_expansion' ) ) : ''; ?>
 					<?php if ( $issue['pages'] ) : ?>
 						<details class="scangeo-issue-pages"><summary><?php echo count( $issue['pages'] ); ?> página(s) afectada(s)</summary>
 							<ul class="scangeo-pages">
@@ -1176,6 +1179,7 @@ class ScanGEO_Admin {
 								?>
 								<li<?php echo $is_translated ? ' class="scangeo-page-translated"' : ''; ?>>
 									<a href="<?php echo esc_url( $p ); ?>" target="_blank" rel="noopener"><?php echo esc_html( wp_parse_url( $p, PHP_URL_PATH ) ? wp_parse_url( $p, PHP_URL_PATH ) : $p ); ?></a>
+									<?php if ( $browser_proposal_type && ! $is_translated ) : ?><button type="button" class="button-link scangeo-generate-page" data-url="<?php echo esc_attr( $p ); ?>" data-proposal-type="<?php echo esc_attr( $browser_proposal_type ); ?>">Generar propuesta</button><?php endif; ?>
 									<?php if ( $is_translated ) : ?><span class="scangeo-badge scangeo-badge-lang">traducción, no se modifica</span><?php endif; ?>
 								</li>
 							<?php endforeach; ?>
@@ -1207,7 +1211,9 @@ class ScanGEO_Admin {
 								<?php foreach ( $visible_proposal as $p_url => $p_text ) : ?>
 									<div class="scangeo-proposal-item" data-url="<?php echo esc_attr( $p_url ); ?>">
 										<small><?php echo esc_html( wp_parse_url( $p_url, PHP_URL_PATH ) ? wp_parse_url( $p_url, PHP_URL_PATH ) : $p_url ); ?></small>
-										<textarea class="scangeo-proposal-text" data-url="<?php echo esc_attr( $p_url ); ?>" rows="2"><?php echo esc_textarea( $p_text ); ?></textarea>
+										<strong class="scangeo-proposal-url"><?php echo esc_html( $p_url ); ?></strong>
+										<p class="scangeo-proposal-hint">Puedes editar esta propuesta antes de aplicarla.</p>
+										<div class="scangeo-proposal-text" contenteditable="true" role="textbox" aria-multiline="true" data-url="<?php echo esc_attr( $p_url ); ?>"><?php echo wp_kses_post( $p_text ); ?></div>
 										<div class="scangeo-proposal-item-actions">
 											<button type="button" class="button button-primary button-small scangeo-apply-one">Aplicar esta</button>
 											<button type="button" class="button button-small scangeo-discard-one">Descartar esta</button>

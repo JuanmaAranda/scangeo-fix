@@ -370,7 +370,8 @@
 .scangeo-issue-pages { margin: 6px 0; font-size: 13.5px; }
 .scangeo-issue-pages summary { cursor: pointer; color: var(--scangeo-blue); font-weight: 600; }
 .scangeo-pages { margin: 8px 0 0 18px; max-height: 200px; overflow-y: auto; font-size: 13px; }
-.scangeo-pages li { margin-bottom: 3px; }
+.scangeo-pages li { margin-bottom: 5px; }
+.scangeo-generate-page { margin-left: 8px; font-size: 12px; }
 .scangeo-page-translated { opacity: .6; }
 .scangeo-badge-lang {
 	background: #eef0f4;
@@ -423,8 +424,12 @@
 .scangeo-proposal { margin-top: 10px; border-top: 1px solid #f0dfa8; padding-top: 10px; }
 .scangeo-proposal-item { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed #f0dfa8; }
 .scangeo-proposal-item:last-of-type { border-bottom: none; }
-.scangeo-proposal-item small { display: block; color: #8b93a1; margin-bottom: 4px; font-size: 12.5px; }
-.scangeo-proposal-text { width: 100%; font-size: 13px; border-radius: 8px; padding: 8px 10px; }
+.scangeo-proposal-url { display: block; color: #4b5563; margin-bottom: 4px; font-size: 12.5px; overflow-wrap: anywhere; }
+.scangeo-proposal-hint { margin: 0 0 8px; color: #6b7280; font-size: 12px; }
+.scangeo-proposal-text { min-height: 180px; max-height: 480px; overflow: auto; background: #fff; border: 1px solid #d7dce5; border-radius: 8px; padding: 16px; font-size: 14px; line-height: 1.6; }
+.scangeo-proposal-text:focus { outline: 2px solid #8ab4ff; border-color: #2f5cff; }
+.scangeo-proposal-text h2, .scangeo-proposal-text h3 { margin: 1em 0 .45em; }
+.scangeo-proposal-text h2:first-child { margin-top: 0; }
 .scangeo-proposal-item-actions { margin-top: 6px; display: flex; gap: 8px; }
 .scangeo-proposal-item-actions .button-small { font-size: 12px; padding: 2px 10px; height: auto; line-height: 1.8; }
 .scangeo-proposal-bulk { margin-top: 6px; display: flex; gap: 8px; }

@@ -12,10 +12,11 @@
 		$.each( proposal, function ( url, text ) {
 			count++;
 			var $item = $( '<div class="scangeo-proposal-item"></div>' ).attr( 'data-url', url );
-			$( '<small></small>' ).text( url ).appendTo( $item );
-			$( '<textarea class="scangeo-proposal-text" rows="2"></textarea>' )
+			$( '<strong class="scangeo-proposal-url"></strong>' ).text( url ).appendTo( $item );
+			$( '<p class="scangeo-proposal-hint"></p>' ).text( 'Puedes editar esta propuesta antes de aplicarla.' ).appendTo( $item );
+			$( '<div class="scangeo-proposal-text" contenteditable="true" role="textbox" aria-multiline="true"></div>' )
 				.attr( 'data-url', url )
-				.val( text )
+				.html( text )
 				.appendTo( $item );
 			var $itemActions = $( '<div class="scangeo-proposal-item-actions"></div>' );
 			$( '<button type="button" class="button button-primary button-small scangeo-apply-one">Aplicar esta</button>' ).appendTo( $itemActions );
@@ -139,8 +140,7 @@
 		return 'No se pudo solicitar la propuesta a scanGEO (' + response.status + ').';
 	}
 
-	function requestBrowserProposal( $row, type ) {
-		var url = $row.find( '.scangeo-pages li:not(.scangeo-page-translated) a' ).first().attr( 'href' );
+	function requestBrowserProposal( $row, type, url ) {
 		var uid = $row.attr( 'data-uid' ) || '';
 		if ( ! url ) {
 			setRowState( $row, 'failed', 'El informe no incluye una URL editable para esta propuesta.' );
@@ -191,7 +191,9 @@
 		var uid     = $row.attr( 'data-uid' ) || '';
 		var browserType = browserProposalType( issueId );
 		if ( browserType ) {
-			return requestBrowserProposal( $row, browserType );
+			$row.find( '.scangeo-issue-pages' ).prop( 'open', true );
+			$row.find( '.scangeo-result-msg' ).html( '<div class="scangeo-msg-text">Elige una pagina afectada y pulsa "Generar propuesta". Se crea una propuesta por pagina para que puedas revisarla antes de aplicarla.</div>' );
+			return;
 		}
 		setRowState( $row, 'fixing', scangeoFixer.i18n.fixing );
 
@@ -219,6 +221,11 @@
 		fixIssue( $( this ).closest( '.scangeo-issue' ) );
 	} );
 
+	$( document ).on( 'click', '.scangeo-generate-page', function () {
+		var $btn = $( this );
+		requestBrowserProposal( $btn.closest( '.scangeo-issue' ), $btn.data( 'proposal-type' ), $btn.data( 'url' ) );
+	} );
+
 	/* ------------------------- Propuestas de IA ------------------------- */
 
 	$( document ).on( 'click', '.scangeo-apply-one', function () {
@@ -229,7 +236,7 @@
 		var $row  = rowByUid( uid );
 		var url   = $item.data( 'url' );
 		var edited = {};
-		edited[ url ] = $item.find( '.scangeo-proposal-text' ).val();
+		edited[ url ] = $item.find( '.scangeo-proposal-text' ).html();
 
 		$.post( scangeoFixer.ajaxUrl, {
 			action: 'scangeo_apply_suggestion',
@@ -287,7 +294,7 @@
 		var $row  = rowByUid( uid );
 		var edited = {};
 		$wrap.find( '.scangeo-proposal-text' ).each( function () {
-			edited[ $( this ).data( 'url' ) ] = $( this ).val();
+			edited[ $( this ).data( 'url' ) ] = $( this ).html();
 		} );
 
 		$.post( scangeoFixer.ajaxUrl, {
