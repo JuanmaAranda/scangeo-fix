@@ -389,10 +389,11 @@ class ScanGEO_Fixers {
 	}
 
 	private static function apply_meta_description( $edited ) {
-		$keys = self::meta_keys();
-		$ok   = 0;
-		$ko   = array();
-		$undo = array();
+		$keys         = self::meta_keys();
+		$ok           = 0;
+		$ko           = array();
+		$undo         = array();
+		$applied_urls = array();
 		foreach ( (array) $edited as $url => $text ) {
 			if ( self::is_translated_url( $url ) ) {
 				$ko[] = $url . ' (URL traducida por TranslatePress)';
@@ -400,6 +401,7 @@ class ScanGEO_Fixers {
 			}
 			$text = self::smart_trim( sanitize_text_field( (string) $text ), 160 );
 			if ( mb_strlen( $text ) < 20 ) {
+				$ko[] = $url . ' (texto demasiado corto tras editar)';
 				continue;
 			}
 			$post_id = self::url_to_post( $url );
@@ -409,15 +411,17 @@ class ScanGEO_Fixers {
 			}
 			$undo[ $post_id ] = array( 'meta' => $keys['desc'], 'value' => get_post_meta( $post_id, $keys['desc'], true ), 'exists' => metadata_exists( 'post', $post_id, $keys['desc'] ) );
 			update_post_meta( $post_id, $keys['desc'], $text );
+			$applied_urls[] = $url;
 			$ok++;
 		}
 		if ( 0 === $ok ) {
-			return array( 'status' => 'failed', 'message' => 'No se pudo aplicar ninguna propuesta.' );
+			return array( 'status' => 'failed', 'message' => 'No se pudo aplicar ninguna propuesta: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) );
 		}
 		return array(
-			'status'  => 'fixed',
-			'message' => $ok . ' meta description(s) aplicada(s).',
-			'undo'    => array( 'type' => 'meta', 'items' => $undo ),
+			'status'       => empty( $ko ) ? 'fixed' : 'partial',
+			'message'      => $ok . ' meta description(s) aplicada(s)' . ( empty( $ko ) ? '.' : ( '; ' . count( $ko ) . ' no se pudieron aplicar: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) . '.' ) ),
+			'undo'         => array( 'type' => 'meta', 'items' => $undo ),
+			'applied_urls' => $applied_urls,
 		);
 	}
 
@@ -472,32 +476,39 @@ class ScanGEO_Fixers {
 	}
 
 	private static function apply_title( $edited ) {
-		$keys = self::meta_keys();
-		$ok   = 0;
-		$undo = array();
+		$keys         = self::meta_keys();
+		$ok           = 0;
+		$ko           = array();
+		$undo         = array();
+		$applied_urls = array();
 		foreach ( (array) $edited as $url => $text ) {
 			if ( self::is_translated_url( $url ) ) {
+				$ko[] = $url . ' (URL traducida por TranslatePress)';
 				continue;
 			}
 			$text = self::smart_trim( sanitize_text_field( (string) $text ), 60 );
 			if ( mb_strlen( $text ) < 10 ) {
+				$ko[] = $url . ' (texto demasiado corto tras editar)';
 				continue;
 			}
 			$post_id = self::url_to_post( $url );
 			if ( ! $post_id ) {
+				$ko[] = $url;
 				continue;
 			}
 			$undo[ $post_id ] = array( 'meta' => $keys['title'], 'value' => get_post_meta( $post_id, $keys['title'], true ), 'exists' => metadata_exists( 'post', $post_id, $keys['title'] ) );
 			update_post_meta( $post_id, $keys['title'], $text );
+			$applied_urls[] = $url;
 			$ok++;
 		}
 		if ( 0 === $ok ) {
-			return array( 'status' => 'failed', 'message' => 'No se pudo aplicar ninguna propuesta.' );
+			return array( 'status' => 'failed', 'message' => 'No se pudo aplicar ninguna propuesta: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) );
 		}
 		return array(
-			'status'  => 'fixed',
-			'message' => $ok . ' título(s) SEO aplicado(s).',
-			'undo'    => array( 'type' => 'meta', 'items' => $undo ),
+			'status'       => empty( $ko ) ? 'fixed' : 'partial',
+			'message'      => $ok . ' título(s) SEO aplicado(s)' . ( empty( $ko ) ? '.' : ( '; ' . count( $ko ) . ' no se pudieron aplicar: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) . '.' ) ),
+			'undo'         => array( 'type' => 'meta', 'items' => $undo ),
+			'applied_urls' => $applied_urls,
 		);
 	}
 
@@ -612,20 +623,25 @@ class ScanGEO_Fixers {
 
 	private static function apply_block_insert( $edited, $type ) {
 		$ok           = 0;
+		$ko           = array();
 		$undo         = array();
+		$applied_urls = array();
 		$marker_start = '<!-- scangeo:' . $type . ' -->';
 		$marker_end   = '<!-- /scangeo:' . $type . ' -->';
 
 		foreach ( (array) $edited as $url => $html ) {
 			if ( self::is_translated_url( $url ) ) {
+				$ko[] = $url . ' (URL traducida por TranslatePress)';
 				continue;
 			}
 			$html = wp_kses_post( (string) $html );
 			if ( '' === trim( wp_strip_all_tags( $html ) ) ) {
+				$ko[] = $url . ' (contenido vacío tras editar)';
 				continue;
 			}
 			$post_id = self::url_to_post( $url );
 			if ( ! $post_id ) {
+				$ko[] = $url;
 				continue;
 			}
 			$post        = get_post( $post_id );
@@ -635,10 +651,11 @@ class ScanGEO_Fixers {
 
 			$undo[ $post_id ] = array( 'content' => $original );
 			wp_update_post( array( 'ID' => $post_id, 'post_content' => $new_content ) );
+			$applied_urls[] = $url;
 			$ok++;
 		}
 		if ( 0 === $ok ) {
-			return array( 'status' => 'failed', 'message' => 'No se pudo insertar ninguna propuesta.' );
+			return array( 'status' => 'failed', 'message' => 'No se pudo insertar ninguna propuesta: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) );
 		}
 		$labels = array(
 			'faq'    => 'bloque(s) de preguntas frecuentes insertado(s) al final del contenido',
@@ -647,9 +664,10 @@ class ScanGEO_Fixers {
 			'expand' => 'sección(es) de contenido ampliado insertada(s) al final del contenido',
 		);
 		return array(
-			'status'  => 'fixed',
-			'message' => $ok . ' ' . $labels[ $type ] . '.',
-			'undo'    => array( 'type' => 'content', 'items' => $undo ),
+			'status'       => empty( $ko ) ? 'fixed' : 'partial',
+			'message'      => $ok . ' ' . $labels[ $type ] . ( empty( $ko ) ? '.' : ( '; ' . count( $ko ) . ' no se pudieron insertar: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) . '.' ) ),
+			'undo'         => array( 'type' => 'content', 'items' => $undo ),
+			'applied_urls' => $applied_urls,
 		);
 	}
 
@@ -747,7 +765,13 @@ class ScanGEO_Fixers {
 		if ( $ok > 0 && empty( $ko ) ) {
 			$result = array( 'status' => 'fixed', 'message' => $ok . ' ' . $verb . '. ' . $note );
 		} elseif ( $ok > 0 ) {
-			$result = array( 'status' => 'fixed', 'message' => $ok . ' ' . $verb . '; pendientes: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) . '. ' . $note );
+			// No se marca 'fixed' si quedan páginas sin arreglar: eso ocultaría
+			// el fallo real. 'partial' dice la verdad y deja el botón "Reparar"
+			// activo para reintentar solo lo que falta.
+			$result = array(
+				'status'  => 'partial',
+				'message' => $ok . ' ' . $verb . ', pero ' . count( $ko ) . ' página(s) no se pudieron arreglar: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) . ( count( $ko ) > 5 ? '…' : '' ) . '. ' . $note . ' Pulsa "Reparar" de nuevo para reintentar solo las pendientes.',
+			);
 		} else {
 			return array( 'status' => 'failed', 'message' => 'No se pudo arreglar ninguna: ' . implode( '; ', array_slice( $ko, 0, 5 ) ) );
 		}

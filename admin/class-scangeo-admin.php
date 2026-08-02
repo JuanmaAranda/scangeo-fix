@@ -136,6 +136,7 @@ class ScanGEO_Admin {
 			'i18n'      => array(
 				'fixing'    => 'Reparando…',
 				'fixed'     => 'Corregido',
+				'partial'   => 'Corregido parcialmente',
 				'failed'    => 'No se pudo arreglar',
 				'manual'    => 'Requiere acción manual',
 				'confirm'   => 'Se intentarán reparar todos los fallos automáticamente (se modificarán metadatos y ajustes del sitio). ¿Continuar?',
@@ -471,7 +472,13 @@ class ScanGEO_Admin {
 		}
 
 		$result = ScanGEO_Fixers::apply( $issue, $clean );
-		$entry  = self::merge_partial_result( $uid, $clean, $result, true );
+		// Solo se retiran de la propuesta las URLs que de verdad se aplicaron;
+		// las que fallaron se quedan pendientes para poder reintentarlas, en
+		// vez de darlas por hechas silenciosamente.
+		$handled = ( isset( $result['applied_urls'] ) && is_array( $result['applied_urls'] ) )
+			? array_intersect_key( $clean, array_flip( $result['applied_urls'] ) )
+			: $clean;
+		$entry   = self::merge_partial_result( $uid, $handled, $result, true );
 
 		wp_send_json_success( array_merge( $entry, array( 'uid' => $uid ) ) );
 	}
@@ -532,7 +539,7 @@ class ScanGEO_Admin {
 			unset( $proposal[ $url ] );
 		}
 
-		if ( $was_applied && 'fixed' === $result['status'] ) {
+		if ( $was_applied && in_array( $result['status'], array( 'fixed', 'partial' ), true ) ) {
 			$applied_count += count( $handled_urls );
 			$resolved_urls = array_values( array_unique( array_merge( $resolved_urls, array_keys( $handled_urls ) ) ) );
 			if ( ! empty( $result['undo'] ) ) {
@@ -1084,15 +1091,18 @@ class ScanGEO_Admin {
 			return;
 		}
 
-		$fixed  = 0;
-		$failed = 0;
-		$manual = 0;
+		$fixed   = 0;
+		$partial = 0;
+		$failed  = 0;
+		$manual  = 0;
 		foreach ( $results as $r ) {
 			if ( ! is_array( $r ) || empty( $r['status'] ) ) {
 				continue;
 			}
 			if ( 'fixed' === $r['status'] ) {
 				$fixed++;
+			} elseif ( 'partial' === $r['status'] ) {
+				$partial++;
 			} elseif ( 'failed' === $r['status'] ) {
 				$failed++;
 			} elseif ( 'manual' === $r['status'] ) {
@@ -1251,7 +1261,7 @@ class ScanGEO_Admin {
 			</div>
 		<?php endforeach; ?>
 		</div>
-		<p class="description scangeo-legend">✔ corregido automáticamente · ✖ no se pudo arreglar (ver motivo) · ✋ requiere acción manual · 📝 propuesta de IA pendiente de revisar. Todos los cambios se pueden deshacer con el botón "Deshacer".</p>
+		<p class="description scangeo-legend">✔ corregido automáticamente · ◐ corregido en parte, pulsa "Reparar" para reintentar lo pendiente · ✖ no se pudo arreglar (ver motivo) · ✋ requiere acción manual · 📝 propuesta de IA pendiente de revisar. Todos los cambios se pueden deshacer con el botón "Deshacer".</p>
 		<?php
 	}
 }

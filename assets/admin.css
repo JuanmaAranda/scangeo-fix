@@ -346,6 +346,7 @@
 .scangeo-issue[data-status="fixed"] { background: var(--scangeo-good-soft); border-color: #a7e8c8; }
 .scangeo-issue[data-status="failed"] { background: var(--scangeo-bad-soft); border-color: #f3b4b6; }
 .scangeo-issue[data-status="suggested"] { background: var(--scangeo-mid-soft); border-color: #f6d999; }
+.scangeo-issue[data-status="partial"] { background: var(--scangeo-mid-soft); border-color: #f6d999; }
 
 .scangeo-issue-status { display: flex; justify-content: center; padding-top: 3px; }
 .scangeo-issue-main { min-width: 0; }
@@ -414,6 +415,7 @@
 .scangeo-icon-failed::before { content: "✖"; color: var(--scangeo-bad); font-weight: bold; }
 .scangeo-icon-manual::before { content: "✋"; }
 .scangeo-icon-suggested::before { content: "📝"; }
+.scangeo-icon-partial::before { content: "◐"; color: var(--scangeo-mid); font-weight: bold; }
 
 @keyframes scangeo-spin { to { transform: rotate(360deg); } }
 

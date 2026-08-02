@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.2.0
+Stable tag: 2.2.1
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,10 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.2.1 =
+* Corrección importante: el ZIP de la release se empaquetaba con rutas de Windows (barra invertida) y sin una carpeta raíz real, así que WordPress no podía identificar una única carpeta al extraerlo y cada actualización acababa en un directorio nuevo (scangeo-fix-2.1.9, scangeo-fix-2.2.0...). El paquete ahora usa rutas estándar (barra normal) con una sola carpeta `scangeo-fix/`, para que las actualizaciones futuras se instalen siempre en el mismo sitio.
+* Corrección importante: varios reparadores que afectan a más de una página (alt de imágenes, meta descriptions, títulos SEO, FAQ, respuesta directa, enlaces internos, ampliar contenido) marcaban la fila entera como "corregido" en cuanto se arreglaba una sola página, aunque el resto fallaran. Ahora existe un estado "corregido en parte" honesto que dice cuántas páginas quedaron pendientes, y el botón "Reparar" se queda activo para reintentar solo esas.
 
 = 2.2.0 =
 * Unificado el identificador del paquete: ZIP y carpeta raíz pasan a llamarse siempre `scangeo-fix`.
