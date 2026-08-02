@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -54,6 +54,14 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
+
+= 2.1.1 =
+* Corrección importante: las llamadas al proveedor de IA (incluida, Anthropic u OpenAI) ahora fuerzan su propio tiempo de espera (45 s) por encima del que el hosting pudiera estar imponiendo mediante el filtro interno de WordPress `http_request_timeout`. Muchos hostings compartidos limitan ahí, de forma fija, todas las peticiones salientes de cualquier plugin a unos 10 segundos, sin importar lo que el plugin pida — esto es lo que producía sistemáticamente el error "cURL error 28: Connection timed out after 10002 milliseconds" en el botón Reparar, incluso después del reintento automático.
+* Corrección: se completa la lógica de reintento automático y el método de diagnóstico usado por el botón "Comprobar conexión" de Ajustes, que en la versión 2.1.0 habían quedado sin terminar (el botón existía pero llamaba a un método que no llegó a incluirse).
+
+= 2.1.0 =
+* Nuevo: botón "Comprobar conexión" en Ajustes → Generación de textos con IA, para diagnosticar de un vistazo si el servidor puede contactar con el proveedor de IA configurado.
+* Aclaración importante: los fallos de tipo "cURL error 28: Connection timed out" no son un problema de permisos de escritura en WordPress, sino de conexión saliente del servidor hacia el proveedor de IA.
 
 = 2.0.0 =
 * Nuevo: IA incluida en el plugin por defecto (GPT-4o mini), sin necesidad de configurar ninguna clave. Con un límite de consultas gratis al mes por sitio; al agotarse, se avisa y se puede añadir una clave propia de Anthropic u OpenAI en Ajustes para seguir sin límite.

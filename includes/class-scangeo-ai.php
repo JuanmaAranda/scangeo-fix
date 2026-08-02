@@ -14,6 +14,49 @@ class ScanGEO_AI {
 	/** Endpoint propio (scangeo.app) para la IA incluida por defecto en el plugin. */
 	const INCLUDED_ENDPOINT = 'https://scangeo.app/api/public/wp-plugin/ai';
 
+	/**
+	 * Timeout que realmente queremos usar en nuestras llamadas al proveedor
+	 * de IA, en segundos.
+	 *
+	 * WordPress permite pasar un 'timeout' por petición a wp_remote_get()/
+	 * wp_remote_post(), pero justo antes de ejecutar la petición vuelve a
+	 * pasar ese valor por el filtro 'http_request_timeout'. Muchos hostings
+	 * (sobre todo compartidos) enganchan ahí un límite fijo — típicamente
+	 * 10 segundos — para todas las peticiones salientes de cualquier
+	 * plugin, sin excepción. Si eso ocurre, el 'timeout' que indicamos al
+	 * llamar a wp_remote_post() se ignora por completo y cURL corta la
+	 * conexión a los ~10000 ms exactos, aunque el proveedor de IA solo
+	 * necesitara uno o dos segundos más para responder. Esto es
+	 * precisamente lo que produce el error "cURL error 28: Connection
+	 * timed out after 10002 milliseconds" de forma sistemática (no
+	 * intermitente) en algunos hostings.
+	 *
+	 * Para evitarlo, enganchamos nuestro propio filtro 'http_request_timeout'
+	 * con prioridad muy alta justo antes de cada llamada y lo retiramos justo
+	 * después, de modo que nuestro valor gane sobre el que el hosting (u
+	 * otro plugin) intente forzar.
+	 */
+	const REQUEST_TIMEOUT = 45;
+
+	/** Fuerza REQUEST_TIMEOUT por encima de cualquier filtro que el hosting u otro plugin aplique a 'http_request_timeout'. */
+	private static function force_timeout( $seconds ) {
+		return $seconds;
+	}
+
+	/**
+	 * Ejecuta wp_remote_get()/wp_remote_post() garantizando que se use
+	 * REQUEST_TIMEOUT (o el que se indique en $args['timeout']) de verdad,
+	 * en vez del que el hosting pudiera estar forzando.
+	 */
+	private static function remote_request( $method, $url, $args ) {
+		add_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
+		$response = ( 'get' === $method )
+			? wp_remote_get( $url, $args )
+			: wp_remote_post( $url, $args );
+		remove_filter( 'http_request_timeout', array( __CLASS__, 'force_timeout' ), PHP_INT_MAX );
+		return $response;
+	}
+
 	public static function is_configured() {
 		$opts     = get_option( 'scangeo_settings', array() );
 		$provider = ! empty( $opts['provider'] ) ? $opts['provider'] : 'included';
@@ -32,18 +75,20 @@ class ScanGEO_AI {
 	 */
 	public static function list_models( $provider, $api_key ) {
 		if ( 'openai' === $provider ) {
-			$response = wp_remote_get(
+			$response = self::remote_request(
+				'get',
 				'https://api.openai.com/v1/models',
 				array(
-					'timeout' => 20,
+					'timeout' => self::REQUEST_TIMEOUT,
 					'headers' => array( 'Authorization' => 'Bearer ' . $api_key ),
 				)
 			);
 		} else {
-			$response = wp_remote_get(
+			$response = self::remote_request(
+				'get',
 				'https://api.anthropic.com/v1/models?limit=100',
 				array(
-					'timeout' => 20,
+					'timeout' => self::REQUEST_TIMEOUT,
 					'headers' => array(
 						'x-api-key'         => $api_key,
 						'anthropic-version' => '2023-06-01',
@@ -94,13 +139,52 @@ class ScanGEO_AI {
 		return $models;
 	}
 
+	/** Fragmentos de mensaje que identifican un fallo de red transitorio (no un fallo real del proveedor). */
+	const TRANSIENT_ERROR_PATTERNS = array(
+		'cURL error 28',
+		'cURL error 7',
+		'cURL error 6',
+		'cURL error 35',
+		'Connection timed out',
+		'Operation timed out',
+		'Could not resolve host',
+		'Connection reset',
+	);
+
 	/**
 	 * Genera texto. Devuelve string o WP_Error.
+	 *
+	 * Si el primer intento falla por un error de red transitorio (ver
+	 * TRANSIENT_ERROR_PATTERNS: son precisamente los que produce una
+	 * conexión saliente que se corta a mitad de camino, muy típico en
+	 * hostings que limitan las conexiones salientes), se reintenta una vez
+	 * más tras una breve espera antes de dar el fallo por definitivo.
 	 *
 	 * @param string $prompt     Instrucción completa.
 	 * @param int    $max_tokens Límite de tokens de salida.
 	 */
 	public static function generate( $prompt, $max_tokens = 300 ) {
+		$result = self::generate_once( $prompt, $max_tokens );
+		if ( is_wp_error( $result ) && self::is_transient_error( $result ) ) {
+			usleep( 800000 );
+			$result = self::generate_once( $prompt, $max_tokens );
+		}
+		return $result;
+	}
+
+	/** Comprueba si un WP_Error corresponde a un fallo de red transitorio (y no, por ejemplo, a una clave inválida o una cuota agotada). */
+	private static function is_transient_error( WP_Error $error ) {
+		$msg = $error->get_error_message();
+		foreach ( self::TRANSIENT_ERROR_PATTERNS as $pattern ) {
+			if ( false !== stripos( $msg, $pattern ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Un único intento de generación, sin reintentos. Devuelve string o WP_Error. */
+	private static function generate_once( $prompt, $max_tokens ) {
 		$opts     = get_option( 'scangeo_settings', array() );
 		$provider = ! empty( $opts['provider'] ) ? $opts['provider'] : 'included';
 
@@ -116,6 +200,49 @@ class ScanGEO_AI {
 		return self::call_anthropic( $opts, $prompt, $max_tokens );
 	}
 
+	/**
+	 * Prueba la conexión con el proveedor de IA configurado (botón
+	 * "Comprobar conexión" en Ajustes). Devuelve un resumen apto para
+	 * mostrar directamente al usuario, incluyendo el tiempo de respuesta y
+	 * si hizo falta un reintento.
+	 *
+	 * @return array{success:bool,message:string,elapsed_ms:int,provider:string,retried:bool}
+	 */
+	public static function test_connection() {
+		$opts     = get_option( 'scangeo_settings', array() );
+		$provider = ! empty( $opts['provider'] ) ? $opts['provider'] : 'included';
+		$start    = microtime( true );
+		$result   = self::generate_once( 'Responde solo con la palabra OK.', 5 );
+		$retried  = false;
+		if ( is_wp_error( $result ) && self::is_transient_error( $result ) ) {
+			$retried = true;
+			usleep( 800000 );
+			$result = self::generate_once( 'Responde solo con la palabra OK.', 5 );
+		}
+		$elapsed_ms = (int) round( ( microtime( true ) - $start ) * 1000 );
+		if ( is_wp_error( $result ) ) {
+			$is_net = self::is_transient_error( $result );
+			$msg    = $result->get_error_message();
+			if ( $is_net ) {
+				$msg = 'Fallo de red al contactar con el proveedor de IA (' . $msg . '). Esto suele significar que tu hosting limita o corta las conexiones salientes a servicios externos (a veces con un límite fijo de unos 10 segundos, sin importar lo que el plugin le pida). Contacta con el soporte de tu hosting y pregunta si permiten conexiones salientes HTTPS de larga duración (al menos 30-45 segundos) hacia servicios de IA de terceros.';
+			}
+			return array(
+				'success'    => false,
+				'message'    => $msg,
+				'elapsed_ms' => $elapsed_ms,
+				'provider'   => $provider,
+				'retried'    => $retried,
+			);
+		}
+		return array(
+			'success'    => true,
+			'message'    => 'Conexión correcta con el proveedor de IA (' . $elapsed_ms . ' ms' . ( $retried ? ', tras un reintento' : '' ) . ').',
+			'elapsed_ms' => $elapsed_ms,
+			'provider'   => $provider,
+			'retried'    => $retried,
+		);
+	}
+
 	/** Dominio del sitio, usado como identificador de cuota en el endpoint incluido. */
 	private static function included_domain() {
 		$host = wp_parse_url( home_url(), PHP_URL_HOST );
@@ -127,10 +254,11 @@ class ScanGEO_AI {
 		if ( ! $domain ) {
 			return new WP_Error( 'scangeo_no_domain', 'No se pudo determinar el dominio de este sitio.' );
 		}
-		$response = wp_remote_post(
+		$response = self::remote_request(
+			'post',
 			self::INCLUDED_ENDPOINT,
 			array(
-				'timeout' => 30,
+				'timeout' => self::REQUEST_TIMEOUT,
 				'headers' => array( 'Content-Type' => 'application/json' ),
 				'body'    => wp_json_encode( array(
 					'domain'     => $domain,
@@ -178,9 +306,10 @@ class ScanGEO_AI {
 		if ( ! $domain ) {
 			return false;
 		}
-		$response = wp_remote_get(
+		$response = self::remote_request(
+			'get',
 			self::INCLUDED_ENDPOINT . '?domain=' . rawurlencode( $domain ),
-			array( 'timeout' => 15 )
+			array( 'timeout' => self::REQUEST_TIMEOUT )
 		);
 		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
 			return false;
@@ -196,10 +325,11 @@ class ScanGEO_AI {
 
 	private static function call_anthropic( $opts, $prompt, $max_tokens ) {
 		$model    = ! empty( $opts['model'] ) ? $opts['model'] : 'claude-haiku-4-5-20251001';
-		$response = wp_remote_post(
+		$response = self::remote_request(
+			'post',
 			'https://api.anthropic.com/v1/messages',
 			array(
-				'timeout' => 30,
+				'timeout' => self::REQUEST_TIMEOUT,
 				'headers' => array(
 					'x-api-key'         => $opts['api_key'],
 					'anthropic-version' => '2023-06-01',
@@ -241,10 +371,11 @@ class ScanGEO_AI {
 	}
 
 	private static function openai_request( $model, $api_key, $prompt, $token_param ) {
-		$response = wp_remote_post(
+		$response = self::remote_request(
+			'post',
 			'https://api.openai.com/v1/chat/completions',
 			array(
-				'timeout' => 30,
+				'timeout' => self::REQUEST_TIMEOUT,
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $api_key,
 					'Content-Type'  => 'application/json',
