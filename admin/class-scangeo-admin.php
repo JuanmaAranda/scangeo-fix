@@ -417,6 +417,10 @@ class ScanGEO_Admin {
 		}
 
 		$results = get_option( 'scangeo_results', array() );
+		$previous = isset( $results[ $uid ] ) && is_array( $results[ $uid ] ) ? $results[ $uid ] : array();
+		if ( ! empty( $previous['resolved_urls'] ) && in_array( $url, (array) $previous['resolved_urls'], true ) ) {
+			wp_send_json_error( array( 'message' => 'Esta página ya tiene una propuesta aplicada.' ), 409 );
+		}
 		$entry = array(
 			'status'   => 'suggested',
 			'message'  => 'Propuesta generada por scanGEO. Revísala y confírmala antes de insertarla.',
@@ -512,6 +516,7 @@ class ScanGEO_Admin {
 		$proposal      = isset( $prev['proposal'] ) && is_array( $prev['proposal'] ) ? $prev['proposal'] : array();
 		$applied_count = isset( $prev['applied_count'] ) ? (int) $prev['applied_count'] : 0;
 		$undo          = isset( $prev['undo'] ) && is_array( $prev['undo'] ) ? $prev['undo'] : array();
+		$resolved_urls = isset( $prev['resolved_urls'] ) && is_array( $prev['resolved_urls'] ) ? array_values( array_unique( $prev['resolved_urls'] ) ) : array();
 
 		// Limpieza defensiva: nunca se debe ofrecer (ni guardar) una propuesta
 		// para una URL traducida, aunque viniera de datos guardados por una
@@ -529,6 +534,7 @@ class ScanGEO_Admin {
 
 		if ( $was_applied && 'fixed' === $result['status'] ) {
 			$applied_count += count( $handled_urls );
+			$resolved_urls = array_values( array_unique( array_merge( $resolved_urls, array_keys( $handled_urls ) ) ) );
 			if ( ! empty( $result['undo'] ) ) {
 				if ( empty( $undo ) ) {
 					$undo = $result['undo'];
@@ -544,6 +550,7 @@ class ScanGEO_Admin {
 				'message'       => ( $was_applied ? $result['message'] : 'Propuesta descartada.' ) . ' Quedan ' . count( $proposal ) . ' propuesta(s) más por revisar.',
 				'proposal'      => $proposal,
 				'applied_count' => $applied_count,
+				'resolved_urls' => $resolved_urls,
 				'time'          => current_time( 'mysql' ),
 			);
 			if ( ! empty( $undo ) ) {
@@ -559,6 +566,7 @@ class ScanGEO_Admin {
 				'status'        => 'fixed',
 				'message'       => $applied_count . ' propuesta(s) aplicada(s) en total.',
 				'applied_count' => $applied_count,
+				'resolved_urls' => $resolved_urls,
 				'time'          => current_time( 'mysql' ),
 			);
 			if ( ! empty( $undo ) ) {
@@ -1153,6 +1161,7 @@ class ScanGEO_Admin {
 				$res = $results[ $issue['id'] ];
 			}
 			$res_status = $res ? $res['status'] : 'pending';
+			$resolved_urls = ( $res && ! empty( $res['resolved_urls'] ) && is_array( $res['resolved_urls'] ) ) ? $res['resolved_urls'] : array();
 			?>
 			<div class="scangeo-issue" data-uid="<?php echo esc_attr( $uid ); ?>" data-issue="<?php echo esc_attr( $issue['id'] ); ?>" data-status="<?php echo esc_attr( $res_status ); ?>" data-category="<?php echo esc_attr( ! empty( $issue['category'] ) ? $issue['category'] : 'otros' ); ?>">
 				<div class="scangeo-issue-status"><span class="scangeo-icon scangeo-icon-<?php echo esc_attr( $res_status ); ?>"></span></div>
@@ -1170,12 +1179,14 @@ class ScanGEO_Admin {
 					<?php if ( $issue['pages'] ) : ?>
 						<details class="scangeo-issue-pages"><summary><?php echo count( $issue['pages'] ); ?> página(s) afectada(s)</summary>
 							<ul class="scangeo-pages">
-							<?php foreach ( array_slice( $issue['pages'], 0, 20 ) as $p ) :
-								$is_translated = ScanGEO_Fixers::is_translated_url( $p );
-								?>
+			<?php foreach ( array_slice( $issue['pages'], 0, 20 ) as $p ) :
+				$is_translated = ScanGEO_Fixers::is_translated_url( $p );
+				$is_resolved   = 'fixed' === $res_status || in_array( $p, $resolved_urls, true );
+				?>
 								<li<?php echo $is_translated ? ' class="scangeo-page-translated"' : ''; ?>>
 									<a href="<?php echo esc_url( $p ); ?>" target="_blank" rel="noopener"><?php echo esc_html( wp_parse_url( $p, PHP_URL_PATH ) ? wp_parse_url( $p, PHP_URL_PATH ) : $p ); ?></a>
-									<?php if ( $browser_proposal_type && ! $is_translated ) : ?><button type="button" class="button-link scangeo-generate-page" data-url="<?php echo esc_attr( $p ); ?>" data-proposal-type="<?php echo esc_attr( $browser_proposal_type ); ?>">Generar propuesta</button><?php endif; ?>
+					<?php if ( $browser_proposal_type && ! $is_translated && ! $is_resolved ) : ?><button type="button" class="button-link scangeo-generate-page" data-url="<?php echo esc_attr( $p ); ?>" data-proposal-type="<?php echo esc_attr( $browser_proposal_type ); ?>">Generar propuesta</button><?php endif; ?>
+					<?php if ( $is_resolved ) : ?><span class="scangeo-badge scangeo-badge-good">Corregida</span><?php endif; ?>
 									<?php if ( $is_translated ) : ?><span class="scangeo-badge scangeo-badge-lang">traducción, no se modifica</span><?php endif; ?>
 								</li>
 							<?php endforeach; ?>

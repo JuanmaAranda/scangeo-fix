@@ -7,7 +7,7 @@
  * botón "Actualizar ahora", sin que el usuario tenga que hacerlo a mano.
  *
  * CÓMO FUNCIONA (ya configurado para este plugin):
- * El plugin descarga el .zip directamente desde /dist/scangeo-fixer.zip
+ * El plugin descarga el .zip directamente desde /dist/scangeo-fix.zip
  * dentro de este mismo repositorio (usando el tag de cada versión), en vez
  * de depender de los "adjuntos" de un Release de GitHub. Esto permite
  * publicar una versión nueva subiendo el código y el .zip con un simple
@@ -26,8 +26,12 @@ class ScanGEO_Updater {
 
 	const CACHE_KEY       = 'scangeo_fixer_latest_release';
 	const CACHE_KEY_ALL   = 'scangeo_fixer_all_releases';
-	const PLUGIN_FILE     = 'scangeo-fixer/scangeo-fixer.php';
-	const SLUG            = 'scangeo-fixer';
+	// Identificador definitivo: tanto la carpeta instalada como el ZIP son
+	// scangeo-fix. Se conserva la ruta antigua solo para migrar instalaciones
+	// que se actualizaron antes de este cambio.
+	const PLUGIN_FILE        = 'scangeo-fix/scangeo-fixer.php';
+	const LEGACY_PLUGIN_FILE = 'scangeo-fixer/scangeo-fixer.php';
+	const SLUG               = 'scangeo-fix';
 
 	private static $initialized = false;
 
@@ -57,7 +61,7 @@ class ScanGEO_Updater {
 	 * más arriba — no depende de estar en el repositorio oficial.
 	 */
 	public static function row_meta( $links, $file ) {
-		if ( self::PLUGIN_FILE !== $file ) {
+		if ( self::PLUGIN_FILE !== $file && self::LEGACY_PLUGIN_FILE !== $file ) {
 			return $links;
 		}
 		// Evita añadir un segundo enlace idéntico si, por lo que sea
@@ -97,7 +101,7 @@ class ScanGEO_Updater {
 		} elseif ( ! empty( $hook_extra['plugin'] ) ) {
 			$plugins = array( $hook_extra['plugin'] );
 		}
-		if ( ! in_array( self::PLUGIN_FILE, $plugins, true ) ) {
+		if ( ! in_array( self::PLUGIN_FILE, $plugins, true ) && ! in_array( self::LEGACY_PLUGIN_FILE, $plugins, true ) ) {
 			return;
 		}
 		delete_transient( self::CACHE_KEY );
@@ -118,11 +122,13 @@ class ScanGEO_Updater {
 		if ( ! function_exists( 'get_plugin_data' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
-		$path = WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE;
-		if ( file_exists( $path ) ) {
-			$data = get_plugin_data( $path, false, false );
-			if ( ! empty( $data['Version'] ) ) {
-				return trim( (string) $data['Version'] );
+		foreach ( array( self::PLUGIN_FILE, self::LEGACY_PLUGIN_FILE ) as $plugin_file ) {
+			$path = WP_PLUGIN_DIR . '/' . $plugin_file;
+			if ( file_exists( $path ) ) {
+				$data = get_plugin_data( $path, false, false );
+				if ( ! empty( $data['Version'] ) ) {
+					return trim( (string) $data['Version'] );
+				}
 			}
 		}
 		return defined( 'SCANGEO_FIXER_VERSION' ) ? trim( (string) SCANGEO_FIXER_VERSION ) : '0';
@@ -167,7 +173,7 @@ class ScanGEO_Updater {
 		// repositorio (en /dist), en vez de como "asset" adjunto al release.
 		// raw.githubusercontent.com sirve ese archivo tal cual, sin pasar
 		// por el sistema de adjuntos de GitHub.
-		$zip_url = 'https://raw.githubusercontent.com/' . self::REPO . '/' . rawurlencode( (string) $data['tag_name'] ) . '/dist/scangeo-fixer.zip';
+		$zip_url = 'https://raw.githubusercontent.com/' . self::REPO . '/' . rawurlencode( (string) $data['tag_name'] ) . '/dist/scangeo-fix.zip';
 
 		$result = array(
 			'version'   => $version,
@@ -250,18 +256,17 @@ class ScanGEO_Updater {
 			// actualización que pudiera haber quedado de una comprobación
 			// anterior, en vez de dejarlo "colgado" indefinidamente: es
 			// preferible no avisar por un momento a mostrar un aviso falso.
-			if ( isset( $transient->response[ self::PLUGIN_FILE ] ) ) {
-				unset( $transient->response[ self::PLUGIN_FILE ] );
-			}
+			unset( $transient->response[ self::PLUGIN_FILE ], $transient->response[ self::LEGACY_PLUGIN_FILE ] );
 			return $transient;
 		}
 		$installed = self::installed_version();
 		$latest    = trim( (string) $release['version'] );
 		if ( version_compare( $latest, $installed, '>' ) ) {
 			$icon_url = defined( 'SCANGEO_FIXER_URL' ) ? SCANGEO_FIXER_URL . 'assets/icon.png' : '';
-			$transient->response[ self::PLUGIN_FILE ] = (object) array(
+			$installed_file = file_exists( WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE ) ? self::PLUGIN_FILE : self::LEGACY_PLUGIN_FILE;
+			$transient->response[ $installed_file ] = (object) array(
 				'slug'        => self::SLUG,
-				'plugin'      => self::PLUGIN_FILE,
+				'plugin'      => $installed_file,
 				'new_version' => $latest,
 				'url'         => $release['notes_url'],
 				'package'     => $release['zip_url'],
@@ -273,13 +278,14 @@ class ScanGEO_Updater {
 			// explícitamente cualquier entrada previa para este plugin
 			// (si no, un aviso de una comprobación anterior podría quedarse
 			// "pegado" en el transient aunque ya no aplique).
-			unset( $transient->response[ self::PLUGIN_FILE ] );
+			unset( $transient->response[ self::PLUGIN_FILE ], $transient->response[ self::LEGACY_PLUGIN_FILE ] );
 			if ( ! isset( $transient->no_update ) ) {
 				$transient->no_update = array();
 			}
-			$transient->no_update[ self::PLUGIN_FILE ] = (object) array(
+			$installed_file = file_exists( WP_PLUGIN_DIR . '/' . self::PLUGIN_FILE ) ? self::PLUGIN_FILE : self::LEGACY_PLUGIN_FILE;
+			$transient->no_update[ $installed_file ] = (object) array(
 				'slug'        => self::SLUG,
-				'plugin'      => self::PLUGIN_FILE,
+				'plugin'      => $installed_file,
 				'new_version' => $installed,
 				'url'         => $release['notes_url'],
 				'package'     => '',
@@ -336,7 +342,7 @@ class ScanGEO_Updater {
 			. '<p>Cualquier cambio aplicado se puede deshacer con un clic, y el plugin guarda el histórico de puntuaciones entre informes para ver la evolución de tu web con el tiempo.</p>';
 
 		$installation = '<ol>'
-			. '<li>Sube la carpeta <code>scangeo-fixer</code> a <code>/wp-content/plugins/</code>, o instala el .zip desde Plugins → Añadir nuevo → Subir plugin.</li>'
+			. '<li>Sube la carpeta <code>scangeo-fix</code> a <code>/wp-content/plugins/</code>, o instala el .zip desde Plugins → Añadir nuevo → Subir plugin.</li>'
 			. '<li>Activa el plugin.</li>'
 			. '<li>(Opcional, recomendado) En scanGEO Fixer → Ajustes, añade tu clave de IA (Anthropic u OpenAI) para las propuestas de contenido y el resumen en palabras sencillas.</li>'
 			. '<li>Ve a scanGEO Fixer, sube el informe .md exportado desde scanGEO.app y pulsa "Reparar todo".</li>'
@@ -366,12 +372,12 @@ class ScanGEO_Updater {
 	/**
 	 * Si se usa el zip automático de GitHub (sin adjuntar uno propio), la
 	 * carpeta interna tiene un nombre distinto (usuario-repo-hash). Esto la
-	 * renombra a "scangeo-fixer" para que WordPress lo trate como una
+	 * renombra a "scangeo-fix" para que WordPress lo trate como una
 	 * actualización del mismo plugin en vez de instalar uno nuevo aparte.
 	 */
 	public static function fix_folder_name( $source, $remote_source, $upgrader, $hook_extra ) {
 		global $wp_filesystem;
-		if ( empty( $hook_extra['plugin'] ) || self::PLUGIN_FILE !== $hook_extra['plugin'] ) {
+		if ( empty( $hook_extra['plugin'] ) || ( self::PLUGIN_FILE !== $hook_extra['plugin'] && self::LEGACY_PLUGIN_FILE !== $hook_extra['plugin'] ) ) {
 			return $source;
 		}
 		$desired = trailingslashit( $remote_source ) . self::SLUG . '/';

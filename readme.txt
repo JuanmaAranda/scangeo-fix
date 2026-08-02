@@ -4,7 +4,7 @@ Tags: seo, geo, ai, schema, audit
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 2.1.9
+Stable tag: 2.2.0
 License: GPLv2 or later
 
 Sube el informe .md de scanGEO.app, mira tu nota GEO y repara automáticamente (o con propuesta revisable) los fallos SEO/GEO detectados.
@@ -48,19 +48,24 @@ Los headings, la estructura semántica y la longitud del contenido nunca se rees
 
 == Installation ==
 
-1. Sube la carpeta `scangeo-fixer` a `/wp-content/plugins/` o instala el .zip desde Plugins → Añadir nuevo.
+1. Sube la carpeta `scangeo-fix` a `/wp-content/plugins/` o instala el .zip desde Plugins → Añadir nuevo.
 2. Activa el plugin.
 3. (Opcional) En scanGEO Fixer → Ajustes, añade tu clave API de Anthropic u OpenAI para generar textos con IA, y tus perfiles sociales para el schema.
 4. Ve a scanGEO Fixer, sube el .md exportado por scanGEO.app y pulsa "Reparar todo".
 
 == Changelog ==
 
+= 2.2.0 =
+* Unificado el identificador del paquete: ZIP y carpeta raíz pasan a llamarse siempre `scangeo-fix`.
+* Las instalaciones antiguas `scangeo-fixer` se migran automáticamente durante la actualización.
+* Las propuestas aplicadas quedan marcadas como corregidas y ya no vuelven a ofrecerse para la misma página.
+
 = 2.1.9 =
 * Corregida la codificación de todos los textos del panel y de las propuestas: tildes, eñes y signos vuelven a mostrarse correctamente.
 
 = 2.1.8 =
 * Corregido el enlace de actualización: registra primero la versión en el listado nativo de WordPress y después abre Escritorio > Actualizaciones.
-* El paquete incluye siempre la carpeta raíz `scangeo-fixer/`, necesaria para que WordPress lo reconozca como una actualización.
+* El paquete incluye siempre la carpeta raíz `scangeo-fix/`, necesaria para que WordPress lo reconozca como una actualización.
 
 = 2.1.6 =
 * Corrección crítica del actualizador: el ZIP vuelve a incluir una única carpeta raíz `scangeo-fixer/`. WordPress ya instala la actualización en la ruta esperada y no desactiva el plugin por archivo inexistente.
